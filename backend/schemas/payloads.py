@@ -95,3 +95,14 @@ class StayUpsert(BaseModel):
     max_stay_date: Optional[date] = None
     actual_leave_date: Optional[date] = None
     note: Optional[str] = None
+
+
+class DictionaryItemPayload(BaseModel):
+    label: str
+    value: str
+    sort_order: int = 0
+
+
+class DictionaryReplace(BaseModel):
+    label: Optional[str] = None
+    items: list[DictionaryItemPayload]

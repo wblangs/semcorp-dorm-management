@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from backend.api import router as api_router
 from backend.database.session import engine, run_lightweight_migrations
 from backend.models import Base
+from backend.database.session import Session
+from backend.services.management import seed_default_dictionaries
 
 app = FastAPI(title="外派员工宿舍与通勤管理系统")
 
@@ -44,3 +46,5 @@ def health() -> dict:
 
 Base.metadata.create_all(engine)
 run_lightweight_migrations()
+with Session(engine) as session:
+    seed_default_dictionaries(session)

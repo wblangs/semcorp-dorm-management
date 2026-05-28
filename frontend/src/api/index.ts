@@ -3,6 +3,7 @@ import type {
   Allocation,
   AvailableRoom,
   DashboardData,
+  DictionaryState,
   Dorm,
   Person,
   Room,
@@ -16,6 +17,16 @@ type NewPerson = Omit<Person, "id">;
 
 export const api = {
   getDashboard: () => apiRequest<DashboardData>("/api/dashboard"),
+
+  getDictionaries: () => apiRequest<DictionaryState>("/api/dictionaries"),
+  replaceDictionary: (
+    key: string,
+    payload: { label?: string; items: { label: string; value: string; sort_order?: number }[] },
+  ) =>
+    apiRequest<DictionaryState>(`/api/dictionaries/${key}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
 
   getDorms: () => apiRequest<Dorm[]>("/api/dorms"),
   createDorm: (payload: NewDorm) =>

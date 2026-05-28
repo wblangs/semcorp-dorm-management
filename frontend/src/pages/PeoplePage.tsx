@@ -18,7 +18,7 @@ type PersonFormState = {
 const emptyForm: PersonFormState = {
   chinese_name: "",
   english_name: "",
-  department: "",
+  department: "IT",
   person_type: "Employee",
   gender: "Male",
   can_drive: false,
@@ -93,13 +93,27 @@ export function PeoplePage() {
     }
   };
 
+  const departmentOptions = dictionaries.departments.some((option) => option.value === form.department) || !form.department
+    ? dictionaries.departments
+    : [
+        ...dictionaries.departments,
+        { label: `${form.department}（当前值未在字典中）`, value: form.department },
+      ];
+
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">人员管理</h2>
       <form onSubmit={onSubmit} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-3">
         <input className="rounded-lg border border-slate-300 px-3 py-2" placeholder="中文名" value={form.chinese_name} onChange={(e) => setForm((f) => ({ ...f, chinese_name: e.target.value }))} required />
         <input className="rounded-lg border border-slate-300 px-3 py-2" placeholder="英文名" value={form.english_name} onChange={(e) => setForm((f) => ({ ...f, english_name: e.target.value }))} required />
-        <input className="rounded-lg border border-slate-300 px-3 py-2" placeholder="部门" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))} required />
+        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}>
+          <option value="">选择部门</option>
+          {departmentOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.person_type} onChange={(e) => setForm((f) => ({ ...f, person_type: e.target.value }))} required>
           {dictionaries.personTypes.map((option) => (
             <option key={option.value} value={option.value}>

@@ -3,9 +3,9 @@ import { FormEvent, useState } from "react";
 import {
   defaultDictionaries,
   dictionaryLabels,
-  saveDictionaries,
 } from "../dictionaries";
 import type { DictionaryKey, DictionaryOption } from "../dictionaries";
+import { api } from "../api";
 import { useDictionaries } from "../hooks/useDictionaries";
 
 const dictionaryKeys = Object.keys(dictionaryLabels) as DictionaryKey[];
@@ -14,16 +14,27 @@ const emptyOption = { label: "", value: "" };
 
 export function DictionariesPage() {
   const dictionaries = useDictionaries();
+  const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<Record<DictionaryKey, DictionaryOption>>({
     dormTypes: emptyOption,
     roomTypes: emptyOption,
     personTypes: emptyOption,
+    departments: emptyOption,
     visaTypes: emptyOption,
     statuses: emptyOption,
   });
 
-  const updateDictionary = (key: DictionaryKey, options: DictionaryOption[]) => {
-    saveDictionaries({ ...dictionaries, [key]: options });
+  const updateDictionary = async (key: DictionaryKey, options: DictionaryOption[]) => {
+    setError("");
+    try {
+      await api.replaceDictionary(key, {
+        label: dictionaryLabels[key],
+        items: options.map((option, index) => ({ ...option, sort_order: index })),
+      });
+      window.dispatchEvent(new Event("dictionaries:updated"));
+    } catch (err) {
+      setError((err as Error).message);
+    }
   };
 
   const onAdd = (event: FormEvent, key: DictionaryKey) => {
@@ -32,13 +43,26 @@ export function DictionariesPage() {
     const value = draft.value.trim() || draft.label.trim();
     const label = draft.label.trim() || value;
     if (!value || !label) return;
-    updateDictionary(key, [...dictionaries[key], { label, value }]);
+    void updateDictionary(key, [...dictionaries[key], { label, value }]);
     setDrafts((current) => ({ ...current, [key]: emptyOption }));
   };
 
-  const restoreDefaults = () => {
+  const restoreDefaults = async () => {
     if (!confirm("确认恢复全部默认字典？")) return;
-    saveDictionaries(defaultDictionaries);
+    setError("");
+    try {
+      await Promise.all(
+        dictionaryKeys.map((key) =>
+          api.replaceDictionary(key, {
+            label: dictionaryLabels[key],
+            items: defaultDictionaries[key].map((option, index) => ({ ...option, sort_order: index })),
+          }),
+        ),
+      );
+      window.dispatchEvent(new Event("dictionaries:updated"));
+    } catch (err) {
+      setError((err as Error).message);
+    }
   };
 
   return (
@@ -53,6 +77,7 @@ export function DictionariesPage() {
           恢复默认
         </button>
       </div>
+      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {dictionaryKeys.map((key) => (
@@ -69,7 +94,7 @@ export function DictionariesPage() {
                       const options = dictionaries[key].map((item, itemIndex) =>
                         itemIndex === index ? { ...item, label: event.target.value } : item,
                       );
-                      updateDictionary(key, options);
+                      void updateDictionary(key, options);
                     }}
                   />
                   <input
@@ -80,13 +105,13 @@ export function DictionariesPage() {
                       const options = dictionaries[key].map((item, itemIndex) =>
                         itemIndex === index ? { ...item, value: event.target.value } : item,
                       );
-                      updateDictionary(key, options);
+                      void updateDictionary(key, options);
                     }}
                   />
                   <button
                     className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
                     type="button"
-                    onClick={() => updateDictionary(key, dictionaries[key].filter((_, itemIndex) => itemIndex !== index))}
+                    onClick={() => void updateDictionary(key, dictionaries[key].filter((_, itemIndex) => itemIndex !== index))}
                   >
                     删除
                   </button>

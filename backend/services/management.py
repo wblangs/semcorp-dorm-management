@@ -1,15 +1,17 @@
-from datetime import date, timedelta
-from typing import Optional
+import json
+from datetime import date, datetime, timedelta
+from typing import Optional, Union
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.models import Allocation, Dorm, Person, Room, Stay, Vehicle
+from backend.models import AuditLog, Allocation, Dictionary, DictionaryItem, Dorm, Person, Room, Stay, Vehicle
 from backend.schemas import (
     AllocationCreate,
     AllocationUpdate,
     CheckoutRequest,
+    DictionaryReplace,
     DormCreate,
     DormUpdate,
     PersonCreate,
@@ -19,6 +21,114 @@ from backend.schemas import (
     StayUpsert,
     VehicleCreate,
 )
+
+DEFAULT_DICTIONARIES = {
+    "dormTypes": {
+        "label": "宿舍类型",
+        "items": [("House", "House"), ("Apartment", "Apartment"), ("Hotel", "Hotel")],
+    },
+    "roomTypes": {
+        "label": "房间类型",
+        "items": [("Single", "Single"), ("Double", "Double"), ("Suite", "Suite")],
+    },
+    "personTypes": {
+        "label": "人员类型",
+        "items": [("Employee", "Employee"), ("Contractor", "Contractor"), ("Visitor", "Visitor")],
+    },
+    "departments": {
+        "label": "部门",
+        "items": [
+            ("IT", "IT"),
+            ("质量", "质量"),
+            ("生产", "生产"),
+            ("技术", "技术"),
+            ("设备", "设备"),
+            ("EHS", "EHS"),
+            ("仓库", "仓库"),
+            ("HR", "HR"),
+            ("财务", "财务"),
+            ("行政", "行政"),
+            ("采购", "采购"),
+            ("物流", "物流"),
+        ],
+    },
+    "visaTypes": {
+        "label": "签证类型",
+        "items": [("B1/B2", "B1/B2"), ("L1", "L1"), ("H1B", "H1B"), ("ESTA", "ESTA")],
+    },
+    "statuses": {
+        "label": "状态",
+        "items": [("active", "active"), ("inactive", "inactive")],
+    },
+}
+
+
+def _json_default(value):
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return str(value)
+
+
+def _model_data(model) -> dict:
+    return {
+        column.name: getattr(model, column.name)
+        for column in model.__table__.columns
+    }
+
+
+def _audit(
+    db: Session,
+    *,
+    entity_type: str,
+    entity_id: Union[int, str],
+    action: str,
+    before_data: Optional[dict],
+    after_data: Optional[dict],
+    operator: str = "admin",
+) -> None:
+    db.add(
+        AuditLog(
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            action=action,
+            before_data=json.dumps(before_data, ensure_ascii=False, default=_json_default) if before_data else None,
+            after_data=json.dumps(after_data, ensure_ascii=False, default=_json_default) if after_data else None,
+            operator=operator,
+        )
+    )
+
+
+def _active_stmt(model):
+    return select(model).where(model.is_deleted.is_(False))
+
+
+def _get_active(db: Session, model, entity_id):
+    entity = db.get(model, entity_id)
+    if not entity or entity.is_deleted:
+        return None
+    return entity
+
+
+def _validate_department_option(db: Session, department: Optional[str]) -> None:
+    if not department:
+        return
+    dictionary = db.scalar(
+        select(Dictionary).where(
+            Dictionary.key == "departments",
+            Dictionary.is_deleted.is_(False),
+        )
+    )
+    if not dictionary:
+        return
+    exists = db.scalar(
+        select(func.count(DictionaryItem.id)).where(
+            DictionaryItem.dictionary_id == dictionary.id,
+            DictionaryItem.value == department,
+            DictionaryItem.is_deleted.is_(False),
+        )
+    )
+    if not exists:
+        raise HTTPException(status_code=400, detail="部门不在字典选项中")
 def _serialize_stay(stay: Optional[Stay], person: Person, today: date):
     max_stay_date = stay.max_stay_date if stay else None
     remaining_legal_days = (max_stay_date - today).days if max_stay_date else None
@@ -60,7 +170,11 @@ def _serialize_stay(stay: Optional[Stay], person: Person, today: date):
 
 
 def _active_room_count(room_id: int, db: Session, exclude_allocation_id: Optional[int] = None) -> int:
-    stmt = select(func.count(Allocation.id)).where(Allocation.room_id == room_id, Allocation.status == "active")
+    stmt = select(func.count(Allocation.id)).where(
+        Allocation.room_id == room_id,
+        Allocation.status == "active",
+        Allocation.is_deleted.is_(False),
+    )
     if exclude_allocation_id is not None:
         stmt = stmt.where(Allocation.id != exclude_allocation_id)
     return db.scalar(stmt) or 0
@@ -81,6 +195,12 @@ def _validate_allocation_inputs(
         raise HTTPException(status_code=400, detail="宿舍不存在")
     if not room:
         raise HTTPException(status_code=400, detail="房间不存在")
+    if person.is_deleted:
+        raise HTTPException(status_code=400, detail="人员已删除")
+    if dorm.is_deleted:
+        raise HTTPException(status_code=400, detail="宿舍已删除")
+    if room.is_deleted:
+        raise HTTPException(status_code=400, detail="房间已删除")
     if not check_in_date:
         raise HTTPException(status_code=400, detail="入住日期不能为空")
     if room.dorm_id != dorm.id:
@@ -95,149 +215,220 @@ def _validate_allocation_inputs(
 
 
 def list_dorms(db: Session):
-    return db.scalars(select(Dorm).order_by(Dorm.id.desc())).all()
+    return db.scalars(_active_stmt(Dorm).order_by(Dorm.id.desc())).all()
 
 
 def create_dorm(payload: DormCreate, db: Session):
     dorm = Dorm(**payload.model_dump())
     db.add(dorm)
+    db.flush()
+    _audit(db, entity_type="dorm", entity_id=dorm.id, action="create", before_data=None, after_data=_model_data(dorm))
     db.commit()
     db.refresh(dorm)
     return dorm
 
 
 def update_dorm(dorm_id: int, payload: DormUpdate, db: Session):
-    dorm = db.get(Dorm, dorm_id)
+    dorm = _get_active(db, Dorm, dorm_id)
     if not dorm:
         raise HTTPException(status_code=404, detail="Dorm not found")
+    before = _model_data(dorm)
     for key, value in payload.model_dump(exclude_none=True).items():
         setattr(dorm, key, value)
+    db.flush()
+    _audit(db, entity_type="dorm", entity_id=dorm.id, action="update", before_data=before, after_data=_model_data(dorm))
     db.commit()
     db.refresh(dorm)
     return dorm
 
 
 def delete_dorm(dorm_id: int, db: Session):
-    dorm = db.get(Dorm, dorm_id)
+    dorm = _get_active(db, Dorm, dorm_id)
     if not dorm:
         raise HTTPException(status_code=404, detail="Dorm not found")
-    db.delete(dorm)
+    active_count = db.scalar(
+        select(func.count(Allocation.id))
+        .join(Room, Allocation.room_id == Room.id)
+        .where(
+            Room.dorm_id == dorm_id,
+            Room.is_deleted.is_(False),
+            Allocation.status == "active",
+            Allocation.is_deleted.is_(False),
+        )
+    ) or 0
+    if active_count > 0:
+        raise HTTPException(status_code=400, detail="宿舍下属房间存在 active 入住记录，不能删除")
+    before = _model_data(dorm)
+    dorm.is_deleted = True
+    for room in dorm.rooms:
+        if not room.is_deleted:
+            room.is_deleted = True
+    db.flush()
+    _audit(db, entity_type="dorm", entity_id=dorm.id, action="delete", before_data=before, after_data=_model_data(dorm))
     db.commit()
     return {"deleted": True}
 
 
 def list_rooms(dorm_id: Optional[int], db: Session):
-    stmt = select(Room).order_by(Room.id.desc())
+    stmt = _active_stmt(Room).order_by(Room.id.desc())
     if dorm_id is not None:
         stmt = stmt.where(Room.dorm_id == dorm_id)
     return db.scalars(stmt).all()
 
 
 def create_room(payload: RoomCreate, db: Session):
-    if not db.get(Dorm, payload.dorm_id):
+    if not _get_active(db, Dorm, payload.dorm_id):
         raise HTTPException(status_code=400, detail="Dorm does not exist")
     room = Room(**payload.model_dump())
     db.add(room)
+    db.flush()
+    _audit(db, entity_type="room", entity_id=room.id, action="create", before_data=None, after_data=_model_data(room))
     db.commit()
     db.refresh(room)
     return room
 
 
 def update_room(room_id: int, payload: RoomUpdate, db: Session):
-    room = db.get(Room, room_id)
+    room = _get_active(db, Room, room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     values = payload.model_dump(exclude_none=True)
-    if "dorm_id" in values and not db.get(Dorm, values["dorm_id"]):
+    if "dorm_id" in values and not _get_active(db, Dorm, values["dorm_id"]):
         raise HTTPException(status_code=400, detail="Dorm does not exist")
+    before = _model_data(room)
     for key, value in values.items():
         setattr(room, key, value)
+    db.flush()
+    _audit(db, entity_type="room", entity_id=room.id, action="update", before_data=before, after_data=_model_data(room))
     db.commit()
     db.refresh(room)
     return room
 
 
 def delete_room(room_id: int, db: Session):
-    room = db.get(Room, room_id)
+    room = _get_active(db, Room, room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    db.delete(room)
+    active_count = db.scalar(
+        select(func.count(Allocation.id)).where(
+            Allocation.room_id == room_id,
+            Allocation.status == "active",
+            Allocation.is_deleted.is_(False),
+        )
+    ) or 0
+    if active_count > 0:
+        raise HTTPException(status_code=400, detail="房间存在 active 入住记录，不能删除")
+    before = _model_data(room)
+    room.is_deleted = True
+    db.flush()
+    _audit(db, entity_type="room", entity_id=room.id, action="delete", before_data=before, after_data=_model_data(room))
     db.commit()
     return {"deleted": True}
 
 
 def list_people(db: Session):
-    return db.scalars(select(Person).order_by(Person.id.desc())).all()
+    return db.scalars(_active_stmt(Person).order_by(Person.id.desc())).all()
 
 
 def create_person(payload: PersonCreate, db: Session):
+    _validate_department_option(db, payload.department)
     person = Person(**payload.model_dump())
     db.add(person)
+    db.flush()
+    _audit(db, entity_type="person", entity_id=person.id, action="create", before_data=None, after_data=_model_data(person))
     db.commit()
     db.refresh(person)
     return person
 
 
 def update_person(person_id: int, payload: PersonUpdate, db: Session):
-    person = db.get(Person, person_id)
+    person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
+    if payload.department is not None:
+        _validate_department_option(db, payload.department)
+    before = _model_data(person)
     for key, value in payload.model_dump(exclude_none=True).items():
         setattr(person, key, value)
+    db.flush()
+    _audit(db, entity_type="person", entity_id=person.id, action="update", before_data=before, after_data=_model_data(person))
     db.commit()
     db.refresh(person)
     return person
 
 
 def delete_person(person_id: int, db: Session):
-    person = db.get(Person, person_id)
+    person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    db.delete(person)
+    active_count = db.scalar(
+        select(func.count(Allocation.id)).where(
+            Allocation.person_id == person_id,
+            Allocation.status == "active",
+            Allocation.is_deleted.is_(False),
+        )
+    ) or 0
+    if active_count > 0:
+        raise HTTPException(status_code=400, detail="人员存在 active 入住记录，不能删除")
+    before = _model_data(person)
+    person.is_deleted = True
+    if person.stay and not person.stay.is_deleted:
+        person.stay.is_deleted = True
+    db.flush()
+    _audit(db, entity_type="person", entity_id=person.id, action="delete", before_data=before, after_data=_model_data(person))
     db.commit()
     return {"deleted": True}
 
 
 def list_stay(db: Session):
-    people = db.scalars(select(Person).order_by(Person.id.asc())).all()
-    stays = db.scalars(select(Stay)).all()
+    people = db.scalars(_active_stmt(Person).order_by(Person.id.asc())).all()
+    stays = db.scalars(_active_stmt(Stay)).all()
     stay_map = {stay.person_id: stay for stay in stays}
     today = date.today()
     return [_serialize_stay(stay_map.get(person.id), person, today) for person in people]
 
 
 def get_stay(person_id: int, db: Session):
-    person = db.get(Person, person_id)
+    person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="人员不存在")
     today = date.today()
-    stay = db.get(Stay, person_id)
+    stay = _get_active(db, Stay, person_id)
     return _serialize_stay(stay, person, today)
 
 
 def upsert_stay(payload: StayUpsert, db: Session):
-    person = db.get(Person, payload.person_id)
+    person = _get_active(db, Person, payload.person_id)
     if not person:
         raise HTTPException(status_code=400, detail="人员不存在")
     if payload.actual_leave_date and payload.actual_leave_date < payload.arrival_date:
         raise HTTPException(status_code=400, detail="实际离美日期不能早于赴美日期")
-    stay = db.get(Stay, payload.person_id)
+    stay = _get_active(db, Stay, payload.person_id)
     if stay:
+        before = _model_data(stay)
         for key, value in payload.model_dump().items():
             setattr(stay, key, value)
+        action = "update"
     else:
         stay = Stay(**payload.model_dump())
         db.add(stay)
+        before = None
+        action = "create"
+    db.flush()
+    _audit(db, entity_type="stay", entity_id=stay.person_id, action=action, before_data=before, after_data=_model_data(stay))
     db.commit()
     db.refresh(stay)
     return _serialize_stay(stay, person, date.today())
 
 
 def delete_stay(stay_id: int, db: Session):
-    stay = db.get(Stay, stay_id)
+    stay = _get_active(db, Stay, stay_id)
     if not stay:
         raise HTTPException(status_code=404, detail="Stay 记录不存在")
-    db.delete(stay)
+    before = _model_data(stay)
+    stay.is_deleted = True
+    db.flush()
+    _audit(db, entity_type="stay", entity_id=stay.person_id, action="delete", before_data=before, after_data=_model_data(stay))
     db.commit()
     return {"deleted": True}
 
@@ -275,13 +466,13 @@ def list_stay_risks(db: Session):
 
 
 def list_allocations(db: Session):
-    return db.scalars(select(Allocation).order_by(Allocation.id.desc())).all()
+    return db.scalars(_active_stmt(Allocation).order_by(Allocation.id.desc())).all()
 
 
 def create_allocation(payload: AllocationCreate, db: Session):
-    person = db.get(Person, payload.person_id)
-    dorm = db.get(Dorm, payload.dorm_id)
-    room = db.get(Room, payload.room_id)
+    person = _get_active(db, Person, payload.person_id)
+    dorm = _get_active(db, Dorm, payload.dorm_id)
+    room = _get_active(db, Room, payload.room_id)
     _validate_allocation_inputs(
         person=person,
         dorm=dorm,
@@ -290,7 +481,9 @@ def create_allocation(payload: AllocationCreate, db: Session):
         db=db,
     )
     active_person_stmt = select(func.count(Allocation.id)).where(
-        Allocation.person_id == payload.person_id, Allocation.status == "active"
+        Allocation.person_id == payload.person_id,
+        Allocation.status == "active",
+        Allocation.is_deleted.is_(False),
     )
     if db.scalar(active_person_stmt) > 0:
         raise HTTPException(status_code=400, detail="该人员已有在住记录，请先退宿")
@@ -305,13 +498,22 @@ def create_allocation(payload: AllocationCreate, db: Session):
         status="active",
     )
     db.add(allocation)
+    db.flush()
+    _audit(
+        db,
+        entity_type="allocation",
+        entity_id=allocation.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(allocation),
+    )
     db.commit()
     db.refresh(allocation)
     return allocation
 
 
 def update_allocation(allocation_id: int, payload: AllocationUpdate, db: Session):
-    allocation = db.get(Allocation, allocation_id)
+    allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
         raise HTTPException(status_code=404, detail="入住记录不存在")
     if allocation.status != "active":
@@ -321,9 +523,9 @@ def update_allocation(allocation_id: int, payload: AllocationUpdate, db: Session
     next_room_id = payload.room_id if payload.room_id is not None else allocation.room_id
     next_check_in = payload.check_in_date if payload.check_in_date is not None else allocation.check_in_date
 
-    person = db.get(Person, allocation.person_id)
-    dorm = db.get(Dorm, next_dorm_id)
-    room = db.get(Room, next_room_id)
+    person = _get_active(db, Person, allocation.person_id)
+    dorm = _get_active(db, Dorm, next_dorm_id)
+    room = _get_active(db, Room, next_room_id)
     _validate_allocation_inputs(
         person=person,
         dorm=dorm,
@@ -334,47 +536,81 @@ def update_allocation(allocation_id: int, payload: AllocationUpdate, db: Session
     )
 
     update_data = payload.model_dump(exclude_none=True)
+    before = _model_data(allocation)
     for key, value in update_data.items():
         setattr(allocation, key, value)
+    db.flush()
+    _audit(
+        db,
+        entity_type="allocation",
+        entity_id=allocation.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(allocation),
+    )
     db.commit()
     db.refresh(allocation)
     return allocation
 
 
 def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Session):
-    allocation = db.get(Allocation, allocation_id)
+    allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
         raise HTTPException(status_code=404, detail="入住记录不存在")
     if allocation.status == "checked_out":
         raise HTTPException(status_code=400, detail="该入住记录已退宿")
     _ = payload
+    before = _model_data(allocation)
     checkout_date = date.today()
     allocation.actual_check_out_date = checkout_date
     allocation.check_out_date = checkout_date
     allocation.status = "checked_out"
+    db.flush()
+    _audit(
+        db,
+        entity_type="allocation",
+        entity_id=allocation.id,
+        action="checkout",
+        before_data=before,
+        after_data=_model_data(allocation),
+    )
     db.commit()
     db.refresh(allocation)
     return allocation
 
 
 def delete_allocation(allocation_id: int, db: Session):
-    allocation = db.get(Allocation, allocation_id)
+    allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
         raise HTTPException(status_code=404, detail="入住记录不存在")
-    db.delete(allocation)
+    if allocation.status == "active":
+        raise HTTPException(status_code=400, detail="active 入住记录不能直接删除，请先退房")
+    if allocation.status not in {"cancelled", "draft"}:
+        raise HTTPException(status_code=400, detail="仅 cancelled 或 draft 入住记录允许删除")
+    before = _model_data(allocation)
+    allocation.is_deleted = True
+    db.flush()
+    _audit(
+        db,
+        entity_type="allocation",
+        entity_id=allocation.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(allocation),
+    )
     db.commit()
     return {"deleted": True}
 
 
 def list_available_rooms(dorm_id: int, person_id: int, db: Session):
-    person = db.get(Person, person_id)
+    person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="人员不存在")
-    if not db.get(Dorm, dorm_id):
+    if not _get_active(db, Dorm, dorm_id):
         raise HTTPException(status_code=404, detail="宿舍不存在")
 
     rooms = db.scalars(
-        select(Room).where(Room.dorm_id == dorm_id).order_by(Room.id.asc())
+        _active_stmt(Room).where(Room.dorm_id == dorm_id).order_by(Room.id.asc())
     ).all()
     result = []
     for room in rooms:
@@ -413,11 +649,141 @@ def create_vehicle(payload: VehicleCreate, db: Session):
     return vehicle
 
 
+def seed_default_dictionaries(db: Session):
+    for key, config in DEFAULT_DICTIONARIES.items():
+        dictionary = db.scalar(select(Dictionary).where(Dictionary.key == key))
+        if not dictionary:
+            dictionary = Dictionary(key=key, label=config["label"])
+            db.add(dictionary)
+            db.flush()
+        else:
+            dictionary.label = config["label"]
+            dictionary.is_deleted = False
+        existing_items = {
+            item.value: item
+            for item in db.scalars(
+                select(DictionaryItem).where(DictionaryItem.dictionary_id == dictionary.id)
+            ).all()
+        }
+        for sort_order, (label, value) in enumerate(config["items"]):
+            if value in existing_items:
+                existing_items[value].label = label
+                existing_items[value].sort_order = sort_order
+                existing_items[value].is_deleted = False
+            else:
+                db.add(
+                    DictionaryItem(
+                        dictionary_id=dictionary.id,
+                        label=label,
+                        value=value,
+                        sort_order=sort_order,
+                    )
+                )
+    db.commit()
+
+
+def list_dictionaries(db: Session):
+    rows = db.scalars(_active_stmt(Dictionary).order_by(Dictionary.id.asc())).all()
+    result = {}
+    for dictionary in rows:
+        items = db.scalars(
+            _active_stmt(DictionaryItem)
+            .where(DictionaryItem.dictionary_id == dictionary.id)
+            .order_by(DictionaryItem.sort_order.asc(), DictionaryItem.id.asc())
+        ).all()
+        result[dictionary.key] = [
+            {"label": item.label, "value": item.value, "sort_order": item.sort_order}
+            for item in items
+        ]
+    return result
+
+
+def replace_dictionary(key: str, payload: DictionaryReplace, db: Session):
+    dictionary = db.scalar(select(Dictionary).where(Dictionary.key == key, Dictionary.is_deleted.is_(False)))
+    if not dictionary:
+        dictionary = Dictionary(key=key, label=payload.label or key)
+        db.add(dictionary)
+        db.flush()
+        before = None
+        action = "create"
+    else:
+        before = {
+            "dictionary": _model_data(dictionary),
+            "items": [
+                _model_data(item)
+                for item in db.scalars(
+                    _active_stmt(DictionaryItem).where(DictionaryItem.dictionary_id == dictionary.id)
+                ).all()
+            ],
+        }
+        action = "update"
+        if payload.label:
+            dictionary.label = payload.label
+
+    existing_items = db.scalars(
+        select(DictionaryItem).where(DictionaryItem.dictionary_id == dictionary.id)
+    ).all()
+    item_by_value = {item.value: item for item in existing_items}
+    next_values = {item_payload.value for item_payload in payload.items}
+    for item in existing_items:
+        if item.value not in next_values:
+            item.is_deleted = True
+
+    for sort_order, item_payload in enumerate(payload.items):
+        existing = item_by_value.get(item_payload.value)
+        if existing:
+            existing.label = item_payload.label
+            existing.sort_order = item_payload.sort_order or sort_order
+            existing.is_deleted = False
+        else:
+            db.add(
+                DictionaryItem(
+                    dictionary_id=dictionary.id,
+                    label=item_payload.label,
+                    value=item_payload.value,
+                    sort_order=item_payload.sort_order or sort_order,
+                )
+            )
+    db.flush()
+    after = {
+        "dictionary": _model_data(dictionary),
+        "items": [
+            _model_data(item)
+            for item in db.scalars(
+                _active_stmt(DictionaryItem).where(DictionaryItem.dictionary_id == dictionary.id)
+            ).all()
+        ],
+    }
+    _audit(db, entity_type="dictionary", entity_id=dictionary.key, action=action, before_data=before, after_data=after)
+    db.commit()
+    return list_dictionaries(db)
+
+
+def list_audit_logs(
+    db: Session,
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+):
+    stmt = select(AuditLog).order_by(AuditLog.id.desc())
+    if entity_type:
+        stmt = stmt.where(AuditLog.entity_type == entity_type)
+    if entity_id:
+        stmt = stmt.where(AuditLog.entity_id == str(entity_id))
+    return db.scalars(stmt).all()
+
+
 def dashboard(db: Session):
-    dorm_total = db.scalar(select(func.count(Dorm.id))) or 0
-    room_total = db.scalar(select(func.count(Room.id))) or 0
-    bed_total = db.scalar(select(func.coalesce(func.sum(Room.bed_count), 0))) or 0
-    current_occupancy = db.scalar(select(func.count(Allocation.id)).where(Allocation.status == "active")) or 0
+    dorm_total = db.scalar(select(func.count(Dorm.id)).where(Dorm.is_deleted.is_(False))) or 0
+    room_total = db.scalar(select(func.count(Room.id)).where(Room.is_deleted.is_(False))) or 0
+    bed_total = db.scalar(
+        select(func.coalesce(func.sum(Room.bed_count), 0)).where(Room.is_deleted.is_(False))
+    ) or 0
+    current_occupancy = db.scalar(
+        select(func.count(Allocation.id)).where(
+            Allocation.status == "active",
+            Allocation.is_deleted.is_(False),
+        )
+    ) or 0
     empty_beds = max(bed_total - current_occupancy, 0)
     occupancy_rate = round((current_occupancy / bed_total) * 100, 2) if bed_total > 0 else 0
     available_vehicles = db.scalar(select(func.count(Vehicle.id)).where(Vehicle.status == "available")) or 0
@@ -434,7 +800,7 @@ def dashboard(db: Session):
 
     lease_30_deadline = today + timedelta(days=30)
     lease_60_deadline = today + timedelta(days=60)
-    dorms = db.scalars(select(Dorm)).all()
+    dorms = db.scalars(_active_stmt(Dorm)).all()
     lease_expiring_30 = sum(
         1 for dorm in dorms if dorm.lease_end_date is not None and dorm.lease_end_date <= lease_30_deadline
     )
@@ -469,7 +835,11 @@ def alerts(db: Session):
     red_deadline = today + timedelta(days=30)
     yellow_deadline = today + timedelta(days=60)
 
-    stay_rows = db.execute(select(Stay, Person).join(Person, Stay.person_id == Person.id)).all()
+    stay_rows = db.execute(
+        select(Stay, Person)
+        .join(Person, Stay.person_id == Person.id)
+        .where(Stay.is_deleted.is_(False), Person.is_deleted.is_(False))
+    ).all()
     risk_red = []
     risk_yellow = []
     for stay, person in stay_rows:
@@ -492,7 +862,7 @@ def alerts(db: Session):
             risk_yellow.append(item)
 
     lease_60_deadline = today + timedelta(days=60)
-    dorms = db.scalars(select(Dorm)).all()
+    dorms = db.scalars(_active_stmt(Dorm)).all()
     lease_expiring = []
     for dorm in dorms:
         if dorm.lease_end_date is None:

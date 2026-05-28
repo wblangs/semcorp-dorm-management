@@ -1,16 +1,21 @@
 import { useEffect, useState } from "react";
 
-import { DictionaryState, loadDictionaries } from "../dictionaries";
+import { api } from "../api";
+import { defaultDictionaries, DictionaryState, mergeDictionaries } from "../dictionaries";
 
 export function useDictionaries() {
-  const [dictionaries, setDictionaries] = useState<DictionaryState>(() => loadDictionaries());
+  const [dictionaries, setDictionaries] = useState<DictionaryState>(defaultDictionaries);
 
   useEffect(() => {
-    const reload = () => setDictionaries(loadDictionaries());
-    window.addEventListener("storage", reload);
+    const reload = () => {
+      api
+        .getDictionaries()
+        .then((data) => setDictionaries(mergeDictionaries(data)))
+        .catch(() => setDictionaries(defaultDictionaries));
+    };
+    reload();
     window.addEventListener("dictionaries:updated", reload);
     return () => {
-      window.removeEventListener("storage", reload);
       window.removeEventListener("dictionaries:updated", reload);
     };
   }, []);

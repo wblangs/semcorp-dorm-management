@@ -8,6 +8,7 @@ from backend.schemas import (
     AllocationCreate,
     AllocationUpdate,
     CheckoutRequest,
+    DictionaryReplace,
     DormCreate,
     DormUpdate,
     PersonCreate,
@@ -40,6 +41,25 @@ def update_dorm(dorm_id: int, payload: DormUpdate, db: Session = Depends(get_db)
 @router.delete("/dorms/{dorm_id}")
 def delete_dorm(dorm_id: int, db: Session = Depends(get_db)):
     return management.delete_dorm(dorm_id, db)
+
+
+@router.get("/dictionaries")
+def list_dictionaries(db: Session = Depends(get_db)):
+    return management.list_dictionaries(db)
+
+
+@router.put("/dictionaries/{key}")
+def replace_dictionary(key: str, payload: DictionaryReplace, db: Session = Depends(get_db)):
+    return management.replace_dictionary(key, payload, db)
+
+
+@router.get("/audit-logs")
+def list_audit_logs(
+    entity_type: Optional[str] = Query(default=None),
+    entity_id: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    return management.list_audit_logs(db, entity_type=entity_type, entity_id=entity_id)
 
 
 @router.get("/rooms")

@@ -2,6 +2,7 @@ from .payloads import (
     AllocationCreate,
     AllocationUpdate,
     CheckoutRequest,
+    DictionaryReplace,
     DormCreate,
     DormUpdate,
     PersonCreate,
@@ -22,6 +23,7 @@ __all__ = [
     "AllocationCreate",
     "AllocationUpdate",
     "CheckoutRequest",
+    "DictionaryReplace",
     "VehicleCreate",
     "StayUpsert",
 ]

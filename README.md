@@ -30,6 +30,35 @@ uvicorn main:app --reload
 - 健康检查：`http://127.0.0.1:8000/health`
 - 管理台：`http://127.0.0.1:8000/`（或 `http://127.0.0.1:8000/ui/`）
 
+## 数据库迁移
+
+项目使用 Alembic 管理数据库结构迁移，默认仍使用本地 SQLite 文件 `dorm_commute.db`。
+
+常用命令：
+
+```bash
+source .venv/bin/activate
+alembic upgrade head
+alembic current
+alembic revision --autogenerate -m "describe change"
+```
+
+说明：
+
+- `alembic/env.py` 会读取 `backend.models.Base.metadata`，可自动识别现有 SQLAlchemy models。
+- 当前初始 migration 会兼容空数据库和已有 SQLite 数据库：已有表不会被重建，只会补缺失字段和新增表。
+- 应用启动时仍保留轻量迁移兜底，方便本地 MVP 继续直接运行；正式结构变更应优先写入 Alembic migration。
+- 如果需要切换数据库文件，可设置 `DATABASE_URL`，例如 `DATABASE_URL=sqlite:///./another.db alembic upgrade head`。
+
+## 验证
+
+```bash
+python3 -m compileall backend main.py
+python3 -m compileall alembic tests
+.venv/bin/python tests/backend_smoke_test.py
+cd frontend && npm run build
+```
+
 ## 已实现 API（核心）
 
 - `GET/POST/PUT/DELETE /api/dorms`
@@ -37,6 +66,9 @@ uvicorn main:app --reload
 - `GET/POST/PUT/DELETE /api/people`
 - `GET/POST /api/allocations`
 - `POST /api/allocations/{allocation_id}/checkout`
+- `GET /api/audit-logs`
+- `GET /api/dictionaries`
+- `PUT /api/dictionaries/{key}`
 - `GET/POST /api/stay`
 - `GET/POST /api/vehicles`
 - `GET /api/dashboard`
@@ -48,6 +80,7 @@ uvicorn main:app --reload
 - 宿舍：增删改查（删除会级联删除房间）
 - 房间：增删改查
 - 人员：增删改查
+- 字典：宿舍类型、房间类型、人员类型、部门、签证类型、状态等选项维护；人员部门已字典化，默认部门包括 IT、质量、生产、技术、设备、EHS、仓库、HR、财务、行政、采购、物流
 - 入住分配：新增入住、退房（包含业务规则校验）
 
 ## 入住业务规则

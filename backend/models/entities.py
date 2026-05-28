@@ -1,13 +1,13 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal, Optional
 
-from sqlalchemy import Date, ForeignKey, Integer, String
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base
+from .base import Base, TimestampSoftDeleteMixin
 
 
-class Dorm(Base):
+class Dorm(TimestampSoftDeleteMixin, Base):
     __tablename__ = "dorms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -21,7 +21,7 @@ class Dorm(Base):
     rooms: Mapped[list["Room"]] = relationship(back_populates="dorm", cascade="all, delete-orphan")
 
 
-class Room(Base):
+class Room(TimestampSoftDeleteMixin, Base):
     __tablename__ = "rooms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -36,7 +36,7 @@ class Room(Base):
     allocations: Mapped[list["Allocation"]] = relationship(back_populates="room")
 
 
-class Person(Base):
+class Person(TimestampSoftDeleteMixin, Base):
     __tablename__ = "people"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -54,7 +54,7 @@ class Person(Base):
     allocations: Mapped[list["Allocation"]] = relationship(back_populates="person")
 
 
-class Stay(Base):
+class Stay(TimestampSoftDeleteMixin, Base):
     __tablename__ = "stays"
 
     person_id: Mapped[int] = mapped_column(ForeignKey("people.id"), primary_key=True)
@@ -68,7 +68,7 @@ class Stay(Base):
     person: Mapped["Person"] = relationship(back_populates="stay")
 
 
-class Allocation(Base):
+class Allocation(TimestampSoftDeleteMixin, Base):
     __tablename__ = "allocations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -93,3 +93,42 @@ class Vehicle(Base):
     plate_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     seat_count: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="available")
+
+
+class Dictionary(TimestampSoftDeleteMixin, Base):
+    __tablename__ = "dictionaries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    items: Mapped[list["DictionaryItem"]] = relationship(
+        back_populates="dictionary",
+        cascade="all, delete-orphan",
+    )
+
+
+class DictionaryItem(TimestampSoftDeleteMixin, Base):
+    __tablename__ = "dictionary_items"
+    __table_args__ = (UniqueConstraint("dictionary_id", "value", name="uq_dictionary_item_value"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dictionary_id: Mapped[int] = mapped_column(ForeignKey("dictionaries.id"), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    value: Mapped[str] = mapped_column(String(100), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    dictionary: Mapped["Dictionary"] = relationship(back_populates="items")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    entity_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    before_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    after_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    operator: Mapped[str] = mapped_column(String(80), default="admin", nullable=False)

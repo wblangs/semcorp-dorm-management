@@ -1,3 +1,4 @@
+import os
 from typing import Generator
 
 from sqlalchemy import create_engine
@@ -5,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-DATABASE_URL = "sqlite:///./dorm_commute.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dorm_commute.db")
 
 engine = create_engine(DATABASE_URL, future=True)
 
@@ -24,6 +25,25 @@ def run_lightweight_migrations() -> None:
                 raise
 
     with engine.begin() as conn:
+        for table_name in ("dorms", "rooms", "people", "allocations", "stays"):
+            table_exists = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name=:table_name"),
+                {"table_name": table_name},
+            ).fetchone()
+            if table_exists:
+                columns = {
+                    row[1]
+                    for row in conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+                }
+                if "created_at" not in columns:
+                    safe_add_column(conn, f"ALTER TABLE {table_name} ADD COLUMN created_at DATETIME")
+                    conn.execute(text(f"UPDATE {table_name} SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+                if "updated_at" not in columns:
+                    safe_add_column(conn, f"ALTER TABLE {table_name} ADD COLUMN updated_at DATETIME")
+                    conn.execute(text(f"UPDATE {table_name} SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+                if "is_deleted" not in columns:
+                    safe_add_column(conn, f"ALTER TABLE {table_name} ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL")
+
         allocation_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='allocations'")
         ).fetchone()

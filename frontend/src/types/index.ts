@@ -116,3 +116,11 @@ export type StayRiskPayload = {
   expiring60: StayRecord[];
   overstayed: StayRecord[];
 };
+
+export type DictionaryOption = {
+  label: string;
+  value: string;
+  sort_order?: number;
+};
+
+export type DictionaryState = Record<string, DictionaryOption[]>;
