@@ -84,7 +84,27 @@ class AllocationUpdate(BaseModel):
 class VehicleCreate(BaseModel):
     plate_number: str
     seat_count: int = Field(gt=0)
+    vehicle_type: Optional[str] = None
+    company: Optional[str] = None
+    base_dorm_id: Optional[int] = None
+    insurance_expire_date: Optional[date] = None
+    inspection_expire_date: Optional[date] = None
+    maintenance_due_date: Optional[date] = None
+    note: Optional[str] = None
     status: str = "available"
+
+
+class VehicleUpdate(BaseModel):
+    plate_number: Optional[str] = None
+    seat_count: Optional[int] = Field(default=None, gt=0)
+    vehicle_type: Optional[str] = None
+    company: Optional[str] = None
+    base_dorm_id: Optional[int] = None
+    insurance_expire_date: Optional[date] = None
+    inspection_expire_date: Optional[date] = None
+    maintenance_due_date: Optional[date] = None
+    note: Optional[str] = None
+    status: Optional[str] = None
 
 
 class StayUpsert(BaseModel):

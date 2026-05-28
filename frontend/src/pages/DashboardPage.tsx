@@ -35,6 +35,10 @@ export function DashboardPage() {
     ["Green 正常人数", data.riskGreen],
     ["Unknown 未维护人数", data.riskUnknown],
     ["可用车辆数", data.availableVehicles],
+    ["维修车辆数", data.maintenanceVehicles],
+    ["停用车辆数", data.disabledVehicles],
+    ["30天内保险到期车辆数", data.vehicleInsuranceExpiring30],
+    ["30天内年检到期车辆数", data.vehicleInspectionExpiring30],
   ];
 
   return (

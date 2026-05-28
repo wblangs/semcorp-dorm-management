@@ -69,6 +69,10 @@ export type DashboardData = {
   leaseExpiring30: number;
   leaseExpiring60: number;
   availableVehicles: number;
+  maintenanceVehicles: number;
+  disabledVehicles: number;
+  vehicleInsuranceExpiring30: number;
+  vehicleInspectionExpiring30: number;
   stayRiskSummary: {
     red: number;
     yellow: number;
@@ -78,6 +82,20 @@ export type DashboardData = {
   stayExpiring30: StayRecord[];
   stayExpiring60: StayRecord[];
   stayOverstayed: StayRecord[];
+};
+
+export type Vehicle = {
+  id: number;
+  plate_number: string;
+  seat_count: number;
+  vehicle_type: string | null;
+  company: string | null;
+  base_dorm_id: number | null;
+  insurance_expire_date: string | null;
+  inspection_expire_date: string | null;
+  maintenance_due_date: string | null;
+  note: string | null;
+  status: string;
 };
 
 export type StayPerson = {

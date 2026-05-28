@@ -20,6 +20,7 @@ from backend.schemas import (
     RoomUpdate,
     StayUpsert,
     VehicleCreate,
+    VehicleUpdate,
 )
 
 DEFAULT_DICTIONARIES = {
@@ -59,6 +60,10 @@ DEFAULT_DICTIONARIES = {
     "statuses": {
         "label": "状态",
         "items": [("active", "active"), ("inactive", "inactive")],
+    },
+    "vehicleTypes": {
+        "label": "车辆类型",
+        "items": [("SUV", "SUV"), ("Sedan", "Sedan"), ("Van", "Van"), ("Pickup", "Pickup"), ("Other", "Other")],
     },
 }
 
@@ -638,15 +643,70 @@ def list_available_rooms(dorm_id: int, person_id: int, db: Session):
 
 
 def list_vehicles(db: Session):
-    return db.scalars(select(Vehicle).order_by(Vehicle.id.desc())).all()
+    return db.scalars(_active_stmt(Vehicle).order_by(Vehicle.id.desc())).all()
 
 
 def create_vehicle(payload: VehicleCreate, db: Session):
+    if payload.base_dorm_id and not _get_active(db, Dorm, payload.base_dorm_id):
+        raise HTTPException(status_code=400, detail="所属宿舍不存在")
     vehicle = Vehicle(**payload.model_dump())
     db.add(vehicle)
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(vehicle),
+    )
     db.commit()
     db.refresh(vehicle)
     return vehicle
+
+
+def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    values = payload.model_dump(exclude_none=True)
+    if "base_dorm_id" in values and values["base_dorm_id"] and not _get_active(db, Dorm, values["base_dorm_id"]):
+        raise HTTPException(status_code=400, detail="所属宿舍不存在")
+    before = _model_data(vehicle)
+    for key, value in values.items():
+        setattr(vehicle, key, value)
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(vehicle),
+    )
+    db.commit()
+    db.refresh(vehicle)
+    return vehicle
+
+
+def delete_vehicle(vehicle_id: int, db: Session):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    # Reserved for future dispatch records: block delete when active dispatches exist.
+    before = _model_data(vehicle)
+    vehicle.is_deleted = True
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(vehicle),
+    )
+    db.commit()
+    return {"deleted": True}
 
 
 def seed_default_dictionaries(db: Session):
@@ -786,7 +846,15 @@ def dashboard(db: Session):
     ) or 0
     empty_beds = max(bed_total - current_occupancy, 0)
     occupancy_rate = round((current_occupancy / bed_total) * 100, 2) if bed_total > 0 else 0
-    available_vehicles = db.scalar(select(func.count(Vehicle.id)).where(Vehicle.status == "available")) or 0
+    available_vehicles = db.scalar(
+        select(func.count(Vehicle.id)).where(Vehicle.status == "available", Vehicle.is_deleted.is_(False))
+    ) or 0
+    maintenance_vehicles = db.scalar(
+        select(func.count(Vehicle.id)).where(Vehicle.status == "maintenance", Vehicle.is_deleted.is_(False))
+    ) or 0
+    disabled_vehicles = db.scalar(
+        select(func.count(Vehicle.id)).where(Vehicle.status == "disabled", Vehicle.is_deleted.is_(False))
+    ) or 0
 
     today = date.today()
     red_deadline = today + timedelta(days=30)
@@ -807,6 +875,20 @@ def dashboard(db: Session):
     lease_expiring_60 = sum(
         1 for dorm in dorms if dorm.lease_end_date is not None and dorm.lease_end_date <= lease_60_deadline
     )
+    vehicle_insurance_expiring_30 = db.scalar(
+        select(func.count(Vehicle.id)).where(
+            Vehicle.is_deleted.is_(False),
+            Vehicle.insurance_expire_date.is_not(None),
+            Vehicle.insurance_expire_date <= lease_30_deadline,
+        )
+    ) or 0
+    vehicle_inspection_expiring_30 = db.scalar(
+        select(func.count(Vehicle.id)).where(
+            Vehicle.is_deleted.is_(False),
+            Vehicle.inspection_expire_date.is_not(None),
+            Vehicle.inspection_expire_date <= lease_30_deadline,
+        )
+    ) or 0
 
     return {
         "dormTotal": dorm_total,
@@ -823,6 +905,10 @@ def dashboard(db: Session):
         "leaseExpiring30": lease_expiring_30,
         "leaseExpiring60": lease_expiring_60,
         "availableVehicles": available_vehicles,
+        "maintenanceVehicles": maintenance_vehicles,
+        "disabledVehicles": disabled_vehicles,
+        "vehicleInsuranceExpiring30": vehicle_insurance_expiring_30,
+        "vehicleInspectionExpiring30": vehicle_inspection_expiring_30,
         "stayRiskSummary": stay_risks["riskSummary"],
         "stayExpiring30": stay_risks["expiring30"],
         "stayExpiring60": stay_risks["expiring60"],

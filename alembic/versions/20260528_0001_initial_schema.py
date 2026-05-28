@@ -15,7 +15,7 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-CORE_TABLES = ("dorms", "rooms", "people", "allocations", "stays")
+CORE_TABLES = ("dorms", "rooms", "people", "allocations", "stays", "vehicles")
 
 
 def _has_table(inspector, table_name: str) -> bool:
@@ -157,8 +157,37 @@ def upgrade() -> None:
             sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
             sa.Column("plate_number", sa.String(50), nullable=False, unique=True),
             sa.Column("seat_count", sa.Integer(), nullable=False),
+            sa.Column("vehicle_type", sa.String(50), nullable=True),
+            sa.Column("company", sa.String(100), nullable=True),
+            sa.Column("base_dorm_id", sa.Integer(), sa.ForeignKey("dorms.id"), nullable=True),
+            sa.Column("insurance_expire_date", sa.Date(), nullable=True),
+            sa.Column("inspection_expire_date", sa.Date(), nullable=True),
+            sa.Column("maintenance_due_date", sa.Date(), nullable=True),
+            sa.Column("note", sa.String(500), nullable=True),
             sa.Column("status", sa.String(20), nullable=True),
+            sa.Column("created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP")),
+            sa.Column("updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP")),
+            sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.text("0")),
         )
+        op.create_index("ix_vehicles_base_dorm_id", "vehicles", ["base_dorm_id"])
+
+    inspector = inspect(bind)
+    if _has_table(inspector, "vehicles"):
+        with op.batch_alter_table("vehicles") as batch:
+            if not _has_column(inspector, "vehicles", "vehicle_type"):
+                batch.add_column(sa.Column("vehicle_type", sa.String(50), nullable=True))
+            if not _has_column(inspector, "vehicles", "company"):
+                batch.add_column(sa.Column("company", sa.String(100), nullable=True))
+            if not _has_column(inspector, "vehicles", "base_dorm_id"):
+                batch.add_column(sa.Column("base_dorm_id", sa.Integer(), nullable=True))
+            if not _has_column(inspector, "vehicles", "insurance_expire_date"):
+                batch.add_column(sa.Column("insurance_expire_date", sa.Date(), nullable=True))
+            if not _has_column(inspector, "vehicles", "inspection_expire_date"):
+                batch.add_column(sa.Column("inspection_expire_date", sa.Date(), nullable=True))
+            if not _has_column(inspector, "vehicles", "maintenance_due_date"):
+                batch.add_column(sa.Column("maintenance_due_date", sa.Date(), nullable=True))
+            if not _has_column(inspector, "vehicles", "note"):
+                batch.add_column(sa.Column("note", sa.String(500), nullable=True))
 
     if not _has_table(inspector, "dictionaries"):
         op.create_table(

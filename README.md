@@ -70,7 +70,7 @@ cd frontend && npm run build
 - `GET /api/dictionaries`
 - `PUT /api/dictionaries/{key}`
 - `GET/POST /api/stay`
-- `GET/POST /api/vehicles`
+- `GET/POST/PUT/DELETE /api/vehicles`
 - `GET /api/dashboard`
 - `GET /api/alerts`（Phase 2：停留风险与合同到期提醒）
 
@@ -80,7 +80,8 @@ cd frontend && npm run build
 - 宿舍：增删改查（删除会级联删除房间）
 - 房间：增删改查
 - 人员：增删改查
-- 字典：宿舍类型、房间类型、人员类型、部门、签证类型、状态等选项维护；人员部门已字典化，默认部门包括 IT、质量、生产、技术、设备、EHS、仓库、HR、财务、行政、采购、物流
+- 车辆：车辆基础档案维护（不含派车调度）
+- 字典：宿舍类型、房间类型、人员类型、部门、签证类型、车辆类型、状态等选项维护；人员部门已字典化，默认车辆类型包括 SUV、Sedan、Van、Pickup、Other
 - 入住分配：新增入住、退房（包含业务规则校验）
 
 ## 入住业务规则

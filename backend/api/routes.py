@@ -17,6 +17,7 @@ from backend.schemas import (
     RoomUpdate,
     StayUpsert,
     VehicleCreate,
+    VehicleUpdate,
 )
 from backend.services import management
 
@@ -179,6 +180,16 @@ def list_vehicles(db: Session = Depends(get_db)):
 @router.post("/vehicles")
 def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
     return management.create_vehicle(payload, db)
+
+
+@router.put("/vehicles/{vehicle_id}")
+def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depends(get_db)):
+    return management.update_vehicle(vehicle_id, payload, db)
+
+
+@router.delete("/vehicles/{vehicle_id}")
+def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+    return management.delete_vehicle(vehicle_id, db)
 
 
 @router.get("/dashboard")

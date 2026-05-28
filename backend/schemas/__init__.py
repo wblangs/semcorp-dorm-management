@@ -11,6 +11,7 @@ from .payloads import (
     RoomUpdate,
     StayUpsert,
     VehicleCreate,
+    VehicleUpdate,
 )
 
 __all__ = [
@@ -25,5 +26,6 @@ __all__ = [
     "CheckoutRequest",
     "DictionaryReplace",
     "VehicleCreate",
+    "VehicleUpdate",
     "StayUpsert",
 ]

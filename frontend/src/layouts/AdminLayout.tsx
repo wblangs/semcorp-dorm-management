@@ -7,6 +7,7 @@ const navItems = [
   { to: "/people", label: "人员" },
   { to: "/stay", label: "签证与停留" },
   { to: "/allocations", label: "入住分配" },
+  { to: "/vehicles", label: "车辆" },
   { to: "/dictionaries", label: "字典" },
 ];
 

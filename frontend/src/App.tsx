@@ -8,6 +8,7 @@ import { DormsPage } from "./pages/DormsPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { RoomsPage } from "./pages/RoomsPage";
 import { StayPage } from "./pages/StayPage";
+import { VehiclesPage } from "./pages/VehiclesPage";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/people" element={<PeoplePage />} />
         <Route path="/stay" element={<StayPage />} />
         <Route path="/allocations" element={<AllocationPage />} />
+        <Route path="/vehicles" element={<VehiclesPage />} />
         <Route path="/dictionaries" element={<DictionariesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

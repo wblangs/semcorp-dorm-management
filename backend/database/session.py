@@ -25,7 +25,7 @@ def run_lightweight_migrations() -> None:
                 raise
 
     with engine.begin() as conn:
-        for table_name in ("dorms", "rooms", "people", "allocations", "stays"):
+        for table_name in ("dorms", "rooms", "people", "allocations", "stays", "vehicles"):
             table_exists = conn.execute(
                 text("SELECT name FROM sqlite_master WHERE type='table' AND name=:table_name"),
                 {"table_name": table_name},
@@ -71,3 +71,26 @@ def run_lightweight_migrations() -> None:
                 safe_add_column(conn, "ALTER TABLE stays ADD COLUMN actual_leave_date DATE")
             if "note" not in stay_columns:
                 safe_add_column(conn, "ALTER TABLE stays ADD COLUMN note VARCHAR(500)")
+
+        vehicle_table_exists = conn.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table' AND name='vehicles'")
+        ).fetchone()
+        if vehicle_table_exists:
+            vehicle_columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(vehicles)")).fetchall()
+            }
+            if "vehicle_type" not in vehicle_columns:
+                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN vehicle_type VARCHAR(50)")
+            if "company" not in vehicle_columns:
+                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN company VARCHAR(100)")
+            if "base_dorm_id" not in vehicle_columns:
+                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN base_dorm_id INTEGER")
+            if "insurance_expire_date" not in vehicle_columns:
+                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN insurance_expire_date DATE")
+            if "inspection_expire_date" not in vehicle_columns:
+                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN inspection_expire_date DATE")
+            if "maintenance_due_date" not in vehicle_columns:
+                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN maintenance_due_date DATE")
+            if "note" not in vehicle_columns:
+                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN note VARCHAR(500)")

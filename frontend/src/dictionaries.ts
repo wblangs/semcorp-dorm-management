@@ -4,6 +4,7 @@ export type DictionaryKey =
   | "personTypes"
   | "departments"
   | "visaTypes"
+  | "vehicleTypes"
   | "statuses";
 
 export type DictionaryOption = {
@@ -20,6 +21,7 @@ export const dictionaryLabels: Record<DictionaryKey, string> = {
   personTypes: "人员类型",
   departments: "部门",
   visaTypes: "签证类型",
+  vehicleTypes: "车辆类型",
   statuses: "状态",
 };
 
@@ -58,6 +60,13 @@ export const defaultDictionaries: DictionaryState = {
     { label: "L1", value: "L1" },
     { label: "H1B", value: "H1B" },
     { label: "ESTA", value: "ESTA" },
+  ],
+  vehicleTypes: [
+    { label: "SUV", value: "SUV" },
+    { label: "Sedan", value: "Sedan" },
+    { label: "Van", value: "Van" },
+    { label: "Pickup", value: "Pickup" },
+    { label: "Other", value: "Other" },
   ],
   statuses: [
     { label: "active", value: "active" },

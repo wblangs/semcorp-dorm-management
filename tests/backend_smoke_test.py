@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from backend.models import Base
-from backend.schemas import AllocationCreate, CheckoutRequest, DormCreate, PersonCreate, RoomCreate
+from backend.schemas import AllocationCreate, CheckoutRequest, DormCreate, PersonCreate, RoomCreate, VehicleCreate, VehicleUpdate
 from backend.services import management
 
 
@@ -77,6 +77,33 @@ class BackendSmokeTest(unittest.TestCase):
             self.db,
         )
         self.assertEqual(next_allocation.status, "active")
+
+    def test_vehicle_crud_uses_soft_delete(self):
+        dorm = management.create_dorm(
+            DormCreate(name="Vehicle Base", type="House", address="1 Fleet Road"),
+            self.db,
+        )
+        vehicle = management.create_vehicle(
+            VehicleCreate(
+                plate_number="TEST-001",
+                seat_count=5,
+                vehicle_type="SUV",
+                base_dorm_id=dorm.id,
+                status="available",
+            ),
+            self.db,
+        )
+        self.assertEqual(vehicle.vehicle_type, "SUV")
+
+        updated = management.update_vehicle(
+            vehicle.id,
+            VehicleUpdate(status="maintenance", note="保养中"),
+            self.db,
+        )
+        self.assertEqual(updated.status, "maintenance")
+
+        management.delete_vehicle(vehicle.id, self.db)
+        self.assertEqual(management.list_vehicles(self.db), [])
 
 
 if __name__ == "__main__":

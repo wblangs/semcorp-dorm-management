@@ -9,11 +9,13 @@ import type {
   Room,
   StayRecord,
   StayRiskPayload,
+  Vehicle,
 } from "../types";
 
 type NewDorm = Omit<Dorm, "id">;
 type NewRoom = Omit<Room, "id">;
 type NewPerson = Omit<Person, "id">;
+type NewVehicle = Omit<Vehicle, "id">;
 
 export const api = {
   getDashboard: () => apiRequest<DashboardData>("/api/dashboard"),
@@ -93,4 +95,11 @@ export const api = {
   }) => apiRequest<StayRecord>("/api/stays/upsert", { method: "POST", body: JSON.stringify(payload) }),
   deleteStay: (stay_id: number) => apiRequest<{ deleted: boolean }>(`/api/stays/${stay_id}`, { method: "DELETE" }),
   getStayRisks: () => apiRequest<StayRiskPayload>("/api/stays/risks"),
+
+  getVehicles: () => apiRequest<Vehicle[]>("/api/vehicles"),
+  createVehicle: (payload: NewVehicle) =>
+    apiRequest<Vehicle>("/api/vehicles", { method: "POST", body: JSON.stringify(payload) }),
+  updateVehicle: (id: number, payload: NewVehicle) =>
+    apiRequest<Vehicle>(`/api/vehicles/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteVehicle: (id: number) => apiRequest<{ deleted: boolean }>(`/api/vehicles/${id}`, { method: "DELETE" }),
 };

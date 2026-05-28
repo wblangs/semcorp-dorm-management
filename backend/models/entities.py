@@ -86,12 +86,19 @@ class Allocation(TimestampSoftDeleteMixin, Base):
     room: Mapped["Room"] = relationship(back_populates="allocations")
 
 
-class Vehicle(Base):
+class Vehicle(TimestampSoftDeleteMixin, Base):
     __tablename__ = "vehicles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plate_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     seat_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    vehicle_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    company: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    base_dorm_id: Mapped[Optional[int]] = mapped_column(ForeignKey("dorms.id"), nullable=True, index=True)
+    insurance_expire_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    inspection_expire_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    maintenance_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="available")
 
 
