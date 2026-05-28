@@ -92,4 +92,6 @@ class StayUpsert(BaseModel):
     visa_type: str
     arrival_date: date
     planned_leave_date: date
-    max_stay_date: date
+    max_stay_date: Optional[date] = None
+    actual_leave_date: Optional[date] = None
+    note: Optional[str] = None

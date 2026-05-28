@@ -65,7 +65,54 @@ export type DashboardData = {
   riskRed: number;
   riskYellow: number;
   riskGreen: number;
+  riskUnknown: number;
   leaseExpiring30: number;
   leaseExpiring60: number;
   availableVehicles: number;
+  stayRiskSummary: {
+    red: number;
+    yellow: number;
+    green: number;
+    unknown: number;
+  };
+  stayExpiring30: StayRecord[];
+  stayExpiring60: StayRecord[];
+  stayOverstayed: StayRecord[];
+};
+
+export type StayPerson = {
+  id: number;
+  chinese_name: string;
+  english_name: string;
+  department: string;
+  person_type: string;
+  gender: "Male" | "Female";
+};
+
+export type StayRecord = {
+  id: number | null;
+  person_id: number;
+  person: StayPerson;
+  visa_type: string | null;
+  arrival_date: string | null;
+  planned_leave_date: string | null;
+  max_stay_date: string | null;
+  actual_leave_date: string | null;
+  note: string | null;
+  days_in_us: number | null;
+  remaining_planned_days: number | null;
+  remaining_legal_days: number | null;
+  risk_level: "red" | "yellow" | "green" | "unknown";
+};
+
+export type StayRiskPayload = {
+  riskSummary: {
+    red: number;
+    yellow: number;
+    green: number;
+    unknown: number;
+  };
+  expiring30: StayRecord[];
+  expiring60: StayRecord[];
+  overstayed: StayRecord[];
 };

@@ -5,6 +5,7 @@ const navItems = [
   { to: "/dorms", label: "宿舍" },
   { to: "/rooms", label: "房间" },
   { to: "/people", label: "人员" },
+  { to: "/stay", label: "签证与停留" },
   { to: "/allocations", label: "入住分配" },
 ];
 

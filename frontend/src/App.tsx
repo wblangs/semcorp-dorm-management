@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DormsPage } from "./pages/DormsPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { RoomsPage } from "./pages/RoomsPage";
+import { StayPage } from "./pages/StayPage";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/dorms" element={<DormsPage />} />
         <Route path="/rooms" element={<RoomsPage />} />
         <Route path="/people" element={<PeoplePage />} />
+        <Route path="/stay" element={<StayPage />} />
         <Route path="/allocations" element={<AllocationPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

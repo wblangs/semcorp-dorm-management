@@ -19,6 +19,44 @@ from backend.schemas import (
     StayUpsert,
     VehicleCreate,
 )
+def _serialize_stay(stay: Optional[Stay], person: Person, today: date):
+    max_stay_date = stay.max_stay_date if stay else None
+    remaining_legal_days = (max_stay_date - today).days if max_stay_date else None
+    if remaining_legal_days is None:
+        risk_level = "unknown"
+    elif remaining_legal_days <= 30:
+        risk_level = "red"
+    elif remaining_legal_days <= 60:
+        risk_level = "yellow"
+    else:
+        risk_level = "green"
+
+    days_in_us = (today - stay.arrival_date).days if stay else None
+    remaining_planned_days = (stay.planned_leave_date - today).days if stay else None
+    return {
+        "id": person.id if stay else None,
+        "person_id": person.id,
+        "person": {
+            "id": person.id,
+            "chinese_name": person.chinese_name,
+            "english_name": person.english_name,
+            "department": person.department,
+            "person_type": person.person_type,
+            "gender": person.gender,
+        },
+        "visa_type": stay.visa_type if stay else None,
+        "arrival_date": stay.arrival_date if stay else None,
+        "planned_leave_date": stay.planned_leave_date if stay else None,
+        "max_stay_date": max_stay_date,
+        "actual_leave_date": stay.actual_leave_date if stay else None,
+        "note": stay.note if stay else None,
+        "days_in_us": days_in_us,
+        "remaining_planned_days": remaining_planned_days,
+        "remaining_legal_days": remaining_legal_days,
+        "risk_level": risk_level,
+    }
+
+
 
 
 def _active_room_count(room_id: int, db: Session, exclude_allocation_id: Optional[int] = None) -> int:
@@ -161,12 +199,28 @@ def delete_person(person_id: int, db: Session):
 
 
 def list_stay(db: Session):
-    return db.scalars(select(Stay)).all()
+    people = db.scalars(select(Person).order_by(Person.id.asc())).all()
+    stays = db.scalars(select(Stay)).all()
+    stay_map = {stay.person_id: stay for stay in stays}
+    today = date.today()
+    return [_serialize_stay(stay_map.get(person.id), person, today) for person in people]
+
+
+def get_stay(person_id: int, db: Session):
+    person = db.get(Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="人员不存在")
+    today = date.today()
+    stay = db.get(Stay, person_id)
+    return _serialize_stay(stay, person, today)
 
 
 def upsert_stay(payload: StayUpsert, db: Session):
-    if not db.get(Person, payload.person_id):
-        raise HTTPException(status_code=400, detail="Person does not exist")
+    person = db.get(Person, payload.person_id)
+    if not person:
+        raise HTTPException(status_code=400, detail="人员不存在")
+    if payload.actual_leave_date and payload.actual_leave_date < payload.arrival_date:
+        raise HTTPException(status_code=400, detail="实际离美日期不能早于赴美日期")
     stay = db.get(Stay, payload.person_id)
     if stay:
         for key, value in payload.model_dump().items():
@@ -176,7 +230,48 @@ def upsert_stay(payload: StayUpsert, db: Session):
         db.add(stay)
     db.commit()
     db.refresh(stay)
-    return stay
+    return _serialize_stay(stay, person, date.today())
+
+
+def delete_stay(stay_id: int, db: Session):
+    stay = db.get(Stay, stay_id)
+    if not stay:
+        raise HTTPException(status_code=404, detail="Stay 记录不存在")
+    db.delete(stay)
+    db.commit()
+    return {"deleted": True}
+
+
+def list_stay_risks(db: Session):
+    rows = list_stay(db)
+    risk_summary = {"red": 0, "yellow": 0, "green": 0, "unknown": 0}
+    expiring30 = []
+    expiring60 = []
+    overstayed = []
+    for item in rows:
+        risk_summary[item["risk_level"]] += 1
+        remaining_legal_days = item["remaining_legal_days"]
+        if remaining_legal_days is not None and remaining_legal_days <= 30:
+            expiring30.append(item)
+        if remaining_legal_days is not None and remaining_legal_days <= 60:
+            expiring60.append(item)
+        if (
+            remaining_legal_days is not None
+            and remaining_legal_days < 0
+            and item["actual_leave_date"] is None
+            and item["id"] is not None
+        ):
+            overstayed.append(item)
+
+    expiring30.sort(key=lambda x: x["remaining_legal_days"])
+    expiring60.sort(key=lambda x: x["remaining_legal_days"])
+    overstayed.sort(key=lambda x: x["remaining_legal_days"])
+    return {
+        "riskSummary": risk_summary,
+        "expiring30": expiring30,
+        "expiring60": expiring60,
+        "overstayed": overstayed,
+    }
 
 
 def list_allocations(db: Session):
@@ -322,18 +417,11 @@ def dashboard(db: Session):
     red_deadline = today + timedelta(days=30)
     yellow_deadline = today + timedelta(days=60)
 
-    stays = db.scalars(select(Stay)).all()
-    risk_red = 0
-    risk_yellow = 0
-    risk_green = 0
-    for stay in stays:
-        days_left = (stay.max_stay_date - today).days
-        if days_left <= 30:
-            risk_red += 1
-        elif days_left <= 60:
-            risk_yellow += 1
-        else:
-            risk_green += 1
+    stay_risks = list_stay_risks(db)
+    risk_red = stay_risks["riskSummary"]["red"]
+    risk_yellow = stay_risks["riskSummary"]["yellow"]
+    risk_green = stay_risks["riskSummary"]["green"]
+    risk_unknown = stay_risks["riskSummary"]["unknown"]
 
     lease_30_deadline = today + timedelta(days=30)
     lease_60_deadline = today + timedelta(days=60)
@@ -356,9 +444,14 @@ def dashboard(db: Session):
         "riskRed": risk_red,
         "riskYellow": risk_yellow,
         "riskGreen": risk_green,
+        "riskUnknown": risk_unknown,
         "leaseExpiring30": lease_expiring_30,
         "leaseExpiring60": lease_expiring_60,
         "availableVehicles": available_vehicles,
+        "stayRiskSummary": stay_risks["riskSummary"],
+        "stayExpiring30": stay_risks["expiring30"],
+        "stayExpiring60": stay_risks["expiring60"],
+        "stayOverstayed": stay_risks["overstayed"],
     }
 
 
@@ -371,6 +464,8 @@ def alerts(db: Session):
     risk_red = []
     risk_yellow = []
     for stay, person in stay_rows:
+        if stay.max_stay_date is None:
+            continue
         days_left = (stay.max_stay_date - today).days
         item = {
             "personId": person.id,

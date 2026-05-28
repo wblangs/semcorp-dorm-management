@@ -61,7 +61,9 @@ class Stay(Base):
     visa_type: Mapped[str] = mapped_column(String(50), nullable=False)
     arrival_date: Mapped[date] = mapped_column(Date, nullable=False)
     planned_leave_date: Mapped[date] = mapped_column(Date, nullable=False)
-    max_stay_date: Mapped[date] = mapped_column(Date, nullable=False)
+    max_stay_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    actual_leave_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     person: Mapped["Person"] = relationship(back_populates="stay")
 

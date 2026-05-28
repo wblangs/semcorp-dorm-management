@@ -1,5 +1,14 @@
 import { apiRequest } from "./client";
-import type { Allocation, AvailableRoom, DashboardData, Dorm, Person, Room } from "../types";
+import type {
+  Allocation,
+  AvailableRoom,
+  DashboardData,
+  Dorm,
+  Person,
+  Room,
+  StayRecord,
+  StayRiskPayload,
+} from "../types";
 
 type NewDorm = Omit<Dorm, "id">;
 type NewRoom = Omit<Room, "id">;
@@ -48,4 +57,18 @@ export const api = {
     }),
   getAvailableRooms: (dorm_id: number, person_id: number) =>
     apiRequest<AvailableRoom[]>(`/api/rooms/available?dorm_id=${dorm_id}&person_id=${person_id}`),
+
+  getStays: () => apiRequest<StayRecord[]>("/api/stays"),
+  getStay: (person_id: number) => apiRequest<StayRecord>(`/api/stays/${person_id}`),
+  upsertStay: (payload: {
+    person_id: number;
+    visa_type: string;
+    arrival_date: string;
+    planned_leave_date: string;
+    max_stay_date?: string | null;
+    actual_leave_date?: string | null;
+    note?: string | null;
+  }) => apiRequest<StayRecord>("/api/stays/upsert", { method: "POST", body: JSON.stringify(payload) }),
+  deleteStay: (stay_id: number) => apiRequest<{ deleted: boolean }>(`/api/stays/${stay_id}`, { method: "DELETE" }),
+  getStayRisks: () => apiRequest<StayRiskPayload>("/api/stays/risks"),
 };

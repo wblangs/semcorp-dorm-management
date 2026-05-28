@@ -83,13 +83,38 @@ def delete_person(person_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/stay")
-def list_stay(db: Session = Depends(get_db)):
+def list_stay_legacy(db: Session = Depends(get_db)):
     return management.list_stay(db)
 
 
 @router.post("/stay")
+def upsert_stay_legacy(payload: StayUpsert, db: Session = Depends(get_db)):
+    return management.upsert_stay(payload, db)
+
+
+@router.get("/stays")
+def list_stays(db: Session = Depends(get_db)):
+    return management.list_stay(db)
+
+
+@router.get("/stays/risks")
+def list_stay_risks(db: Session = Depends(get_db)):
+    return management.list_stay_risks(db)
+
+
+@router.get("/stays/{person_id}")
+def get_stay(person_id: int, db: Session = Depends(get_db)):
+    return management.get_stay(person_id, db)
+
+
+@router.post("/stays/upsert")
 def upsert_stay(payload: StayUpsert, db: Session = Depends(get_db)):
     return management.upsert_stay(payload, db)
+
+
+@router.delete("/stays/{stay_id}")
+def delete_stay(stay_id: int, db: Session = Depends(get_db)):
+    return management.delete_stay(stay_id, db)
 
 
 @router.get("/allocations")
