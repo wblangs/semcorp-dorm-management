@@ -2,23 +2,35 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { api } from "../api";
 import { DataTable } from "../components/DataTable";
+import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Room } from "../types";
 
-const emptyForm = {
+type RoomFormState = {
+  dorm_id: string;
+  room_name: string;
+  room_type: string;
+  bed_count: number;
+  gender_limit: "Any" | "Male" | "Female";
+  status: string;
+};
+
+const emptyForm: RoomFormState = {
   dorm_id: "",
   room_name: "",
-  room_type: "",
+  room_type: "Single",
   bed_count: 1,
-  gender_limit: "Any" as const,
+  gender_limit: "Any",
   status: "active",
 };
 
 export function RoomsPage() {
+  const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Room[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<RoomFormState>(emptyForm);
 
   const load = async () => {
     try {
@@ -43,12 +55,46 @@ export function RoomsPage() {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.dorm_id) return;
+    setError("");
     try {
-      await api.createRoom({
+      const payload = {
         ...form,
         dorm_id: Number(form.dorm_id),
-      });
+      };
+      if (editingId) {
+        await api.updateRoom(editingId, payload);
+      } else {
+        await api.createRoom(payload);
+      }
       setForm((f) => ({ ...emptyForm, dorm_id: f.dorm_id }));
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const onEdit = (row: Room) => {
+    setEditingId(row.id);
+    setForm({
+      dorm_id: String(row.dorm_id),
+      room_name: row.room_name,
+      room_type: row.room_type,
+      bed_count: row.bed_count,
+      gender_limit: row.gender_limit,
+      status: row.status,
+    });
+  };
+
+  const onDelete = async (row: Room) => {
+    if (!confirm(`确认删除房间 ${row.room_name}？`)) return;
+    setError("");
+    try {
+      await api.deleteRoom(row.id);
+      if (editingId === row.id) {
+        setEditingId(null);
+        setForm((f) => ({ ...emptyForm, dorm_id: f.dorm_id }));
+      }
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -70,14 +116,41 @@ export function RoomsPage() {
           ))}
         </select>
         <input className="rounded-lg border border-slate-300 px-3 py-2" placeholder="房间名" value={form.room_name} onChange={(e) => setForm((f) => ({ ...f, room_name: e.target.value }))} required />
-        <input className="rounded-lg border border-slate-300 px-3 py-2" placeholder="房间类型" value={form.room_type} onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))} required />
+        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.room_type} onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))} required>
+          {dictionaries.roomTypes.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <input className="rounded-lg border border-slate-300 px-3 py-2" type="number" min={1} value={form.bed_count} onChange={(e) => setForm((f) => ({ ...f, bed_count: Number(e.target.value) }))} required />
         <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.gender_limit} onChange={(e) => setForm((f) => ({ ...f, gender_limit: e.target.value as "Male" | "Female" | "Any" }))}>
           <option value="Any">Any</option>
           <option value="Male">Male</option>
           <option value="Female">Female</option>
         </select>
-        <button className="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white hover:bg-slate-700" type="submit">新增房间</button>
+        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} required>
+          {dictionaries.statuses.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <button className="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white hover:bg-slate-700" type="submit">
+          {editingId ? "保存房间" : "新增房间"}
+        </button>
+        {editingId ? (
+          <button
+            className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+            type="button"
+            onClick={() => {
+              setEditingId(null);
+              setForm((f) => ({ ...emptyForm, dorm_id: f.dorm_id }));
+            }}
+          >
+            取消编辑
+          </button>
+        ) : null}
       </form>
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
@@ -95,6 +168,19 @@ export function RoomsPage() {
             { header: "床位", cell: (row) => row.bed_count },
             { header: "性别限制", cell: (row) => row.gender_limit },
             { header: "状态", cell: (row) => row.status },
+            {
+              header: "操作",
+              cell: (row) => (
+                <div className="flex gap-2">
+                  <button className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100" type="button" onClick={() => onEdit(row)}>
+                    修改
+                  </button>
+                  <button className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50" type="button" onClick={() => void onDelete(row)}>
+                    删除
+                  </button>
+                </div>
+              ),
+            },
           ]}
         />
       )}

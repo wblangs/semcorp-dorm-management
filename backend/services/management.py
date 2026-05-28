@@ -357,6 +357,15 @@ def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Sessio
     return allocation
 
 
+def delete_allocation(allocation_id: int, db: Session):
+    allocation = db.get(Allocation, allocation_id)
+    if not allocation:
+        raise HTTPException(status_code=404, detail="入住记录不存在")
+    db.delete(allocation)
+    db.commit()
+    return {"deleted": True}
+
+
 def list_available_rooms(dorm_id: int, person_id: int, db: Session):
     person = db.get(Person, person_id)
     if not person:

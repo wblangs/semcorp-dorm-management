@@ -20,14 +20,23 @@ export const api = {
   getDorms: () => apiRequest<Dorm[]>("/api/dorms"),
   createDorm: (payload: NewDorm) =>
     apiRequest<Dorm>("/api/dorms", { method: "POST", body: JSON.stringify(payload) }),
+  updateDorm: (id: number, payload: NewDorm) =>
+    apiRequest<Dorm>(`/api/dorms/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteDorm: (id: number) => apiRequest<{ deleted: boolean }>(`/api/dorms/${id}`, { method: "DELETE" }),
 
   getRooms: () => apiRequest<Room[]>("/api/rooms"),
   createRoom: (payload: NewRoom) =>
     apiRequest<Room>("/api/rooms", { method: "POST", body: JSON.stringify(payload) }),
+  updateRoom: (id: number, payload: NewRoom) =>
+    apiRequest<Room>(`/api/rooms/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteRoom: (id: number) => apiRequest<{ deleted: boolean }>(`/api/rooms/${id}`, { method: "DELETE" }),
 
   getPeople: () => apiRequest<Person[]>("/api/people"),
   createPerson: (payload: NewPerson) =>
     apiRequest<Person>("/api/people", { method: "POST", body: JSON.stringify(payload) }),
+  updatePerson: (id: number, payload: NewPerson) =>
+    apiRequest<Person>(`/api/people/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deletePerson: (id: number) => apiRequest<{ deleted: boolean }>(`/api/people/${id}`, { method: "DELETE" }),
 
   getAllocations: () => apiRequest<Allocation[]>("/api/allocations"),
   createAllocation: (payload: {
@@ -50,6 +59,8 @@ export const api = {
     },
   ) =>
     apiRequest<Allocation>(`/api/allocations/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteAllocation: (id: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/allocations/${id}`, { method: "DELETE" }),
   checkoutAllocation: (id: number, check_out_date: string) =>
     apiRequest<Allocation>(`/api/allocations/${id}/checkout`, {
       method: "POST",

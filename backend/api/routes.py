@@ -137,6 +137,11 @@ def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Sessio
     return management.checkout_allocation(allocation_id, payload, db)
 
 
+@router.delete("/allocations/{allocation_id}")
+def delete_allocation(allocation_id: int, db: Session = Depends(get_db)):
+    return management.delete_allocation(allocation_id, db)
+
+
 @router.get("/rooms/available")
 def list_available_rooms(
     dorm_id: int = Query(...),

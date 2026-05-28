@@ -13,6 +13,7 @@ export function AllocationPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     person_id: "",
     dorm_id: "",
@@ -59,6 +60,7 @@ export function AllocationPage() {
       setForm((f) => ({ ...f, room_id: "" }));
       return;
     }
+    if (editingId) return;
     api
       .getAvailableRooms(dormId, personId)
       .then((rooms) => {
@@ -72,15 +74,19 @@ export function AllocationPage() {
         setError(err.message);
         setAvailableRooms([]);
       });
-  }, [form.person_id, form.dorm_id]);
+  }, [editingId, form.person_id, form.dorm_id]);
 
   const selectedPerson = useMemo(
     () => people.find((person) => String(person.id) === form.person_id) ?? null,
     [people, form.person_id],
   );
+  const roomOptions = useMemo(() => {
+    if (!editingId) return availableRooms;
+    return rooms.filter((room) => String(room.dorm_id) === form.dorm_id);
+  }, [availableRooms, editingId, form.dorm_id, rooms]);
   const selectedRoom = useMemo(
-    () => availableRooms.find((room) => String(room.id) === form.room_id) ?? null,
-    [availableRooms, form.room_id],
+    () => roomOptions.find((room) => String(room.id) === form.room_id) ?? null,
+    [form.room_id, roomOptions],
   );
 
   const onSubmit = async (event: FormEvent) => {
@@ -88,25 +94,60 @@ export function AllocationPage() {
     setError("");
     setSubmitting(true);
     try {
-      await api.createAllocation({
-        person_id: Number(form.person_id),
+      const payload = {
         dorm_id: Number(form.dorm_id),
         room_id: Number(form.room_id),
         check_in_date: form.check_in_date,
         expected_check_out_date: form.expected_check_out_date || null,
         note: form.note.trim() || null,
-      });
+      };
+      if (editingId) {
+        await api.updateAllocation(editingId, payload);
+      } else {
+        await api.createAllocation({
+          ...payload,
+          person_id: Number(form.person_id),
+        });
+      }
       setForm((f) => ({
         ...f,
         room_id: "",
         expected_check_out_date: "",
         note: "",
       }));
+      setEditingId(null);
       await load();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onEdit = (row: Allocation) => {
+    if (row.status !== "active") return;
+    setEditingId(row.id);
+    setForm({
+      person_id: String(row.person_id),
+      dorm_id: String(row.dorm_id),
+      room_id: String(row.room_id),
+      check_in_date: row.check_in_date,
+      expected_check_out_date: row.expected_check_out_date ?? "",
+      note: row.note ?? "",
+    });
+  };
+
+  const onDelete = async (row: Allocation) => {
+    if (!confirm(`确认删除入住记录 #${row.id}？`)) return;
+    setError("");
+    try {
+      await api.deleteAllocation(row.id);
+      if (editingId === row.id) {
+        setEditingId(null);
+      }
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
     }
   };
 
@@ -123,7 +164,7 @@ export function AllocationPage() {
         onSubmit={onSubmit}
         className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4"
       >
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.person_id} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} required>
+        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.person_id} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} required disabled={Boolean(editingId)}>
           {people.map((person) => (
             <option key={person.id} value={person.id}>
               {person.chinese_name}/{person.english_name} (#{person.id})
@@ -138,19 +179,26 @@ export function AllocationPage() {
           ))}
         </select>
         <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.room_id} onChange={(e) => setForm((f) => ({ ...f, room_id: e.target.value }))} required>
-          {availableRooms.map((room) => (
+          {roomOptions.map((room) => (
             <option key={room.id} value={room.id}>
-              {room.room_name} (#{room.id}) - 可用床位:{room.available_beds}
+              {room.room_name} (#{room.id})
+              {"available_beds" in room ? ` - 可用床位:${room.available_beds}` : ""}
             </option>
           ))}
         </select>
-        <input className="rounded-lg border border-slate-300 px-3 py-2" type="date" value={form.check_in_date} onChange={(e) => setForm((f) => ({ ...f, check_in_date: e.target.value }))} required />
-        <input
-          className="rounded-lg border border-slate-300 px-3 py-2"
-          type="date"
-          value={form.expected_check_out_date}
-          onChange={(e) => setForm((f) => ({ ...f, expected_check_out_date: e.target.value }))}
-        />
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          <span>入住日期</span>
+          <input className="w-full rounded-lg border border-slate-300 px-3 py-2 font-normal text-slate-900" type="date" value={form.check_in_date} onChange={(e) => setForm((f) => ({ ...f, check_in_date: e.target.value }))} required />
+        </label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          <span>预计退宿日期</span>
+          <input
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 font-normal text-slate-900"
+            type="date"
+            value={form.expected_check_out_date}
+            onChange={(e) => setForm((f) => ({ ...f, expected_check_out_date: e.target.value }))}
+          />
+        </label>
         <input
           className="rounded-lg border border-slate-300 px-3 py-2 md:col-span-2"
           placeholder="备注"
@@ -162,8 +210,25 @@ export function AllocationPage() {
           type="submit"
           disabled={submitting}
         >
-          {submitting ? "提交中..." : "新增入住记录"}
+          {submitting ? "提交中..." : editingId ? "保存入住记录" : "新增入住记录"}
         </button>
+        {editingId ? (
+          <button
+            className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-100 md:col-span-4"
+            type="button"
+            onClick={() => {
+              setEditingId(null);
+              setForm((f) => ({
+                ...f,
+                room_id: "",
+                expected_check_out_date: "",
+                note: "",
+              }));
+            }}
+          >
+            取消编辑
+          </button>
+        ) : null}
       </form>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -185,7 +250,12 @@ export function AllocationPage() {
           {selectedRoom ? (
             <div className="space-y-1 text-sm text-slate-700">
               <div>床位数：{selectedRoom.bed_count}</div>
-              <div>当前入住人数：{selectedRoom.active_occupancy}</div>
+              <div>
+                当前入住人数：
+                {"active_occupancy" in selectedRoom
+                  ? (selectedRoom as AvailableRoom).active_occupancy
+                  : "-"}
+              </div>
               <div>性别限制：{selectedRoom.gender_limit}</div>
             </div>
           ) : (
@@ -216,10 +286,21 @@ export function AllocationPage() {
             },
             {
               header: "操作",
-              cell: (row) =>
-                row.status === "active" ? (
+              cell: (row) => (
+                <div className="flex gap-2">
+                  {row.status === "active" ? (
+                    <button
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+                      type="button"
+                      onClick={() => onEdit(row)}
+                    >
+                      修改
+                    </button>
+                  ) : null}
+                  {row.status === "active" ? (
                   <button
                     className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+                    type="button"
                     onClick={async () => {
                       try {
                         await api.checkoutAllocation(row.id, new Date().toISOString().slice(0, 10));
@@ -231,9 +312,16 @@ export function AllocationPage() {
                   >
                     退房
                   </button>
-                ) : (
-                  "-"
-                ),
+                  ) : null}
+                  <button
+                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                    type="button"
+                    onClick={() => void onDelete(row)}
+                  >
+                    删除
+                  </button>
+                </div>
+              ),
             },
           ]}
         />
