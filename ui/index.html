@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>宿舍与通勤管理系统（MVP）</title>
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@2/css/pico.min.css" />
+    <link rel="stylesheet" href="/ui/styles.css" />
+  </head>
+  <body>
+    <header class="container">
+      <nav>
+        <ul>
+          <li><strong>宿舍与通勤管理（MVP）</strong></li>
+        </ul>
+        <ul class="nav-links">
+          <li><a href="#/dashboard">Dashboard</a></li>
+          <li><a href="#/dorms">宿舍</a></li>
+          <li><a href="#/rooms">房间</a></li>
+          <li><a href="#/people">人员</a></li>
+          <li><a href="#/stay">签证与停留</a></li>
+          <li><a href="#/allocations">入住分配</a></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main class="container" id="app">
+      <article aria-busy="true">加载中…</article>
+    </main>
+
+    <footer class="container">
+      <small>后端：FastAPI / 数据库：SQLite（本地文件）</small>
+    </footer>
+
+    <script src="/ui/app.js"></script>
+  </body>
+</html>
+

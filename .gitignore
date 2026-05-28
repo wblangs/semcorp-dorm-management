@@ -1,0 +1,55 @@
+
+# macOS
+
+.DS_Store
+
+# Python
+
+__pycache__/
+
+*.pyc
+
+*.pyo
+
+*.pyd
+
+# Virtual Environment
+
+.venv/
+
+venv/
+
+# Database
+
+*.db
+
+*.sqlite3
+
+# Environment
+
+.env
+
+.env.local
+
+# Logs
+
+*.log
+
+# Node
+
+node_modules/
+
+# Build
+
+dist/
+
+build/
+
+.next/
+
+# Archives
+
+*.zip
+
+*.rar
+
