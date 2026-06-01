@@ -25,6 +25,12 @@ venv/
 
 *.sqlite3
 
+*.sql
+
+*.dump
+
+*.bak
+
 # Environment
 
 .env
@@ -52,4 +58,3 @@ build/
 *.zip
 
 *.rar
-
