@@ -6,7 +6,9 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.models import AuditLog, Allocation, Dictionary, DictionaryItem, Dorm, Person, Room, Stay, Vehicle
+from backend.auth import create_access_token, hash_password, normalize_username, verify_password
+from backend.core.config import settings
+from backend.models import AuditLog, Allocation, Dictionary, DictionaryItem, Dorm, Person, Room, Stay, User, Vehicle
 from backend.schemas import (
     AllocationCreate,
     AllocationUpdate,
@@ -21,6 +23,9 @@ from backend.schemas import (
     StayUpsert,
     VehicleCreate,
     VehicleUpdate,
+    UserCreate,
+    UserPasswordReset,
+    UserUpdate,
 )
 
 DEFAULT_DICTIONARIES = {
@@ -134,6 +139,125 @@ def _validate_department_option(db: Session, department: Optional[str]) -> None:
     )
     if not exists:
         raise HTTPException(status_code=400, detail="部门不在字典选项中")
+
+
+def _serialize_user(user: User) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "role": user.role,
+        "status": user.status,
+        "last_login_at": user.last_login_at,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+    }
+
+
+def serialize_user(user: User) -> dict:
+    return _serialize_user(user)
+
+
+def _ensure_role_and_status(role: str, status: str) -> None:
+    if role not in {"admin", "user"}:
+        raise HTTPException(status_code=400, detail="角色不支持")
+    if status not in {"active", "disabled"}:
+        raise HTTPException(status_code=400, detail="状态不支持")
+
+
+def _active_admin_count(db: Session) -> int:
+    return db.scalar(
+        select(func.count(User.id)).where(
+            User.role == "admin",
+            User.status == "active",
+            User.is_deleted.is_(False),
+        )
+    ) or 0
+
+
+def login(username: str, password: str, db: Session):
+    normalized_username = normalize_username(username)
+    user = db.scalar(select(User).where(User.username == normalized_username, User.is_deleted.is_(False)))
+    if not user or not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if user.status != "active":
+        raise HTTPException(status_code=403, detail="用户已禁用")
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    return {"token": create_access_token(user.username), "user": _serialize_user(user)}
+
+
+def list_users(db: Session):
+    return [_serialize_user(user) for user in db.scalars(_active_stmt(User).order_by(User.id.asc())).all()]
+
+
+def create_user(payload: UserCreate, db: Session, operator: str = "admin"):
+    if not payload.password:
+        raise HTTPException(status_code=400, detail="密码不能为空")
+    _ensure_role_and_status(payload.role, payload.status)
+    normalized_username = normalize_username(payload.username)
+    existing = db.scalar(select(User).where(User.username == normalized_username, User.is_deleted.is_(False)))
+    if existing:
+        raise HTTPException(status_code=400, detail="用户名已存在")
+    user = User(
+        username=normalized_username,
+        password_hash=hash_password(payload.password),
+        display_name=payload.display_name,
+        role=payload.role,
+        status=payload.status,
+    )
+    db.add(user)
+    db.flush()
+    _audit(db, entity_type="user", entity_id=user.id, action="create", before_data=None, after_data=_serialize_user(user), operator=operator)
+    db.commit()
+    db.refresh(user)
+    return _serialize_user(user)
+
+
+def update_user(user_id: int, payload: UserUpdate, db: Session, operator: str = "admin"):
+    user = _get_active(db, User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    next_role = payload.role if payload.role is not None else user.role
+    next_status = payload.status if payload.status is not None else user.status
+    _ensure_role_and_status(next_role, next_status)
+    if user.role == "admin" and user.status == "active" and (next_role != "admin" or next_status != "active"):
+        if _active_admin_count(db) <= 1:
+            raise HTTPException(status_code=400, detail="不能禁用或降级最后一个 active admin")
+    before = _serialize_user(user)
+    for key, value in payload.model_dump(exclude_none=True).items():
+        setattr(user, key, value)
+    db.flush()
+    _audit(db, entity_type="user", entity_id=user.id, action="update", before_data=before, after_data=_serialize_user(user), operator=operator)
+    db.commit()
+    db.refresh(user)
+    return _serialize_user(user)
+
+
+def reset_user_password(user_id: int, payload: UserPasswordReset, db: Session, operator: str = "admin"):
+    if not payload.password:
+        raise HTTPException(status_code=400, detail="密码不能为空")
+    user = _get_active(db, User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    before = _serialize_user(user)
+    user.password_hash = hash_password(payload.password)
+    db.flush()
+    _audit(db, entity_type="user", entity_id=user.id, action="reset_password", before_data=before, after_data=_serialize_user(user), operator=operator)
+    db.commit()
+    return {"updated": True}
+
+
+def system_info(current_user: User) -> dict:
+    return {
+        "version": settings.app_version,
+        "database": settings.database_type,
+        "environment": settings.app_env,
+        "current_user": _serialize_user(current_user),
+    }
+
+
 def _serialize_stay(stay: Optional[Stay], person: Person, today: date):
     max_stay_date = stay.max_stay_date if stay else None
     remaining_legal_days = (max_stay_date - today).days if max_stay_date else None
@@ -154,7 +278,7 @@ def _serialize_stay(stay: Optional[Stay], person: Person, today: date):
         "person": {
             "id": person.id,
             "chinese_name": person.chinese_name,
-            "english_name": person.english_name,
+            "english_name": person.english_name or "",
             "department": person.department,
             "person_type": person.person_type,
             "gender": person.gender,
@@ -223,17 +347,17 @@ def list_dorms(db: Session):
     return db.scalars(_active_stmt(Dorm).order_by(Dorm.id.desc())).all()
 
 
-def create_dorm(payload: DormCreate, db: Session):
+def create_dorm(payload: DormCreate, db: Session, operator: str = "admin"):
     dorm = Dorm(**payload.model_dump())
     db.add(dorm)
     db.flush()
-    _audit(db, entity_type="dorm", entity_id=dorm.id, action="create", before_data=None, after_data=_model_data(dorm))
+    _audit(db, entity_type="dorm", entity_id=dorm.id, action="create", before_data=None, after_data=_model_data(dorm), operator=operator)
     db.commit()
     db.refresh(dorm)
     return dorm
 
 
-def update_dorm(dorm_id: int, payload: DormUpdate, db: Session):
+def update_dorm(dorm_id: int, payload: DormUpdate, db: Session, operator: str = "admin"):
     dorm = _get_active(db, Dorm, dorm_id)
     if not dorm:
         raise HTTPException(status_code=404, detail="Dorm not found")
@@ -241,13 +365,13 @@ def update_dorm(dorm_id: int, payload: DormUpdate, db: Session):
     for key, value in payload.model_dump(exclude_none=True).items():
         setattr(dorm, key, value)
     db.flush()
-    _audit(db, entity_type="dorm", entity_id=dorm.id, action="update", before_data=before, after_data=_model_data(dorm))
+    _audit(db, entity_type="dorm", entity_id=dorm.id, action="update", before_data=before, after_data=_model_data(dorm), operator=operator)
     db.commit()
     db.refresh(dorm)
     return dorm
 
 
-def delete_dorm(dorm_id: int, db: Session):
+def delete_dorm(dorm_id: int, db: Session, operator: str = "admin"):
     dorm = _get_active(db, Dorm, dorm_id)
     if not dorm:
         raise HTTPException(status_code=404, detail="Dorm not found")
@@ -269,7 +393,7 @@ def delete_dorm(dorm_id: int, db: Session):
         if not room.is_deleted:
             room.is_deleted = True
     db.flush()
-    _audit(db, entity_type="dorm", entity_id=dorm.id, action="delete", before_data=before, after_data=_model_data(dorm))
+    _audit(db, entity_type="dorm", entity_id=dorm.id, action="delete", before_data=before, after_data=_model_data(dorm), operator=operator)
     db.commit()
     return {"deleted": True}
 
@@ -281,19 +405,19 @@ def list_rooms(dorm_id: Optional[int], db: Session):
     return db.scalars(stmt).all()
 
 
-def create_room(payload: RoomCreate, db: Session):
+def create_room(payload: RoomCreate, db: Session, operator: str = "admin"):
     if not _get_active(db, Dorm, payload.dorm_id):
         raise HTTPException(status_code=400, detail="Dorm does not exist")
     room = Room(**payload.model_dump())
     db.add(room)
     db.flush()
-    _audit(db, entity_type="room", entity_id=room.id, action="create", before_data=None, after_data=_model_data(room))
+    _audit(db, entity_type="room", entity_id=room.id, action="create", before_data=None, after_data=_model_data(room), operator=operator)
     db.commit()
     db.refresh(room)
     return room
 
 
-def update_room(room_id: int, payload: RoomUpdate, db: Session):
+def update_room(room_id: int, payload: RoomUpdate, db: Session, operator: str = "admin"):
     room = _get_active(db, Room, room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -304,13 +428,13 @@ def update_room(room_id: int, payload: RoomUpdate, db: Session):
     for key, value in values.items():
         setattr(room, key, value)
     db.flush()
-    _audit(db, entity_type="room", entity_id=room.id, action="update", before_data=before, after_data=_model_data(room))
+    _audit(db, entity_type="room", entity_id=room.id, action="update", before_data=before, after_data=_model_data(room), operator=operator)
     db.commit()
     db.refresh(room)
     return room
 
 
-def delete_room(room_id: int, db: Session):
+def delete_room(room_id: int, db: Session, operator: str = "admin"):
     room = _get_active(db, Room, room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -326,7 +450,7 @@ def delete_room(room_id: int, db: Session):
     before = _model_data(room)
     room.is_deleted = True
     db.flush()
-    _audit(db, entity_type="room", entity_id=room.id, action="delete", before_data=before, after_data=_model_data(room))
+    _audit(db, entity_type="room", entity_id=room.id, action="delete", before_data=before, after_data=_model_data(room), operator=operator)
     db.commit()
     return {"deleted": True}
 
@@ -335,18 +459,18 @@ def list_people(db: Session):
     return db.scalars(_active_stmt(Person).order_by(Person.id.desc())).all()
 
 
-def create_person(payload: PersonCreate, db: Session):
+def create_person(payload: PersonCreate, db: Session, operator: str = "admin"):
     _validate_department_option(db, payload.department)
     person = Person(**payload.model_dump())
     db.add(person)
     db.flush()
-    _audit(db, entity_type="person", entity_id=person.id, action="create", before_data=None, after_data=_model_data(person))
+    _audit(db, entity_type="person", entity_id=person.id, action="create", before_data=None, after_data=_model_data(person), operator=operator)
     db.commit()
     db.refresh(person)
     return person
 
 
-def update_person(person_id: int, payload: PersonUpdate, db: Session):
+def update_person(person_id: int, payload: PersonUpdate, db: Session, operator: str = "admin"):
     person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -356,13 +480,13 @@ def update_person(person_id: int, payload: PersonUpdate, db: Session):
     for key, value in payload.model_dump(exclude_none=True).items():
         setattr(person, key, value)
     db.flush()
-    _audit(db, entity_type="person", entity_id=person.id, action="update", before_data=before, after_data=_model_data(person))
+    _audit(db, entity_type="person", entity_id=person.id, action="update", before_data=before, after_data=_model_data(person), operator=operator)
     db.commit()
     db.refresh(person)
     return person
 
 
-def delete_person(person_id: int, db: Session):
+def delete_person(person_id: int, db: Session, operator: str = "admin"):
     person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -380,7 +504,7 @@ def delete_person(person_id: int, db: Session):
     if person.stay and not person.stay.is_deleted:
         person.stay.is_deleted = True
     db.flush()
-    _audit(db, entity_type="person", entity_id=person.id, action="delete", before_data=before, after_data=_model_data(person))
+    _audit(db, entity_type="person", entity_id=person.id, action="delete", before_data=before, after_data=_model_data(person), operator=operator)
     db.commit()
     return {"deleted": True}
 
@@ -402,7 +526,7 @@ def get_stay(person_id: int, db: Session):
     return _serialize_stay(stay, person, today)
 
 
-def upsert_stay(payload: StayUpsert, db: Session):
+def upsert_stay(payload: StayUpsert, db: Session, operator: str = "admin"):
     person = _get_active(db, Person, payload.person_id)
     if not person:
         raise HTTPException(status_code=400, detail="人员不存在")
@@ -420,20 +544,20 @@ def upsert_stay(payload: StayUpsert, db: Session):
         before = None
         action = "create"
     db.flush()
-    _audit(db, entity_type="stay", entity_id=stay.person_id, action=action, before_data=before, after_data=_model_data(stay))
+    _audit(db, entity_type="stay", entity_id=stay.person_id, action=action, before_data=before, after_data=_model_data(stay), operator=operator)
     db.commit()
     db.refresh(stay)
     return _serialize_stay(stay, person, date.today())
 
 
-def delete_stay(stay_id: int, db: Session):
+def delete_stay(stay_id: int, db: Session, operator: str = "admin"):
     stay = _get_active(db, Stay, stay_id)
     if not stay:
         raise HTTPException(status_code=404, detail="Stay 记录不存在")
     before = _model_data(stay)
     stay.is_deleted = True
     db.flush()
-    _audit(db, entity_type="stay", entity_id=stay.person_id, action="delete", before_data=before, after_data=_model_data(stay))
+    _audit(db, entity_type="stay", entity_id=stay.person_id, action="delete", before_data=before, after_data=_model_data(stay), operator=operator)
     db.commit()
     return {"deleted": True}
 
@@ -474,7 +598,7 @@ def list_allocations(db: Session):
     return db.scalars(_active_stmt(Allocation).order_by(Allocation.id.desc())).all()
 
 
-def create_allocation(payload: AllocationCreate, db: Session):
+def create_allocation(payload: AllocationCreate, db: Session, operator: str = "admin"):
     person = _get_active(db, Person, payload.person_id)
     dorm = _get_active(db, Dorm, payload.dorm_id)
     room = _get_active(db, Room, payload.room_id)
@@ -511,13 +635,14 @@ def create_allocation(payload: AllocationCreate, db: Session):
         action="create",
         before_data=None,
         after_data=_model_data(allocation),
+        operator=operator,
     )
     db.commit()
     db.refresh(allocation)
     return allocation
 
 
-def update_allocation(allocation_id: int, payload: AllocationUpdate, db: Session):
+def update_allocation(allocation_id: int, payload: AllocationUpdate, db: Session, operator: str = "admin"):
     allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
         raise HTTPException(status_code=404, detail="入住记录不存在")
@@ -552,13 +677,14 @@ def update_allocation(allocation_id: int, payload: AllocationUpdate, db: Session
         action="update",
         before_data=before,
         after_data=_model_data(allocation),
+        operator=operator,
     )
     db.commit()
     db.refresh(allocation)
     return allocation
 
 
-def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Session):
+def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Session, operator: str = "admin"):
     allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
         raise HTTPException(status_code=404, detail="入住记录不存在")
@@ -578,13 +704,14 @@ def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Sessio
         action="checkout",
         before_data=before,
         after_data=_model_data(allocation),
+        operator=operator,
     )
     db.commit()
     db.refresh(allocation)
     return allocation
 
 
-def delete_allocation(allocation_id: int, db: Session):
+def delete_allocation(allocation_id: int, db: Session, operator: str = "admin"):
     allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
         raise HTTPException(status_code=404, detail="入住记录不存在")
@@ -602,6 +729,7 @@ def delete_allocation(allocation_id: int, db: Session):
         action="delete",
         before_data=before,
         after_data=_model_data(allocation),
+        operator=operator,
     )
     db.commit()
     return {"deleted": True}
@@ -646,7 +774,7 @@ def list_vehicles(db: Session):
     return db.scalars(_active_stmt(Vehicle).order_by(Vehicle.id.desc())).all()
 
 
-def create_vehicle(payload: VehicleCreate, db: Session):
+def create_vehicle(payload: VehicleCreate, db: Session, operator: str = "admin"):
     if payload.base_dorm_id and not _get_active(db, Dorm, payload.base_dorm_id):
         raise HTTPException(status_code=400, detail="所属宿舍不存在")
     vehicle = Vehicle(**payload.model_dump())
@@ -659,13 +787,14 @@ def create_vehicle(payload: VehicleCreate, db: Session):
         action="create",
         before_data=None,
         after_data=_model_data(vehicle),
+        operator=operator,
     )
     db.commit()
     db.refresh(vehicle)
     return vehicle
 
 
-def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session):
+def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session, operator: str = "admin"):
     vehicle = _get_active(db, Vehicle, vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="车辆不存在")
@@ -683,17 +812,17 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session):
         action="update",
         before_data=before,
         after_data=_model_data(vehicle),
+        operator=operator,
     )
     db.commit()
     db.refresh(vehicle)
     return vehicle
 
 
-def delete_vehicle(vehicle_id: int, db: Session):
+def delete_vehicle(vehicle_id: int, db: Session, operator: str = "admin"):
     vehicle = _get_active(db, Vehicle, vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="车辆不存在")
-    # Reserved for future dispatch records: block delete when active dispatches exist.
     before = _model_data(vehicle)
     vehicle.is_deleted = True
     db.flush()
@@ -704,6 +833,7 @@ def delete_vehicle(vehicle_id: int, db: Session):
         action="delete",
         before_data=before,
         after_data=_model_data(vehicle),
+        operator=operator,
     )
     db.commit()
     return {"deleted": True}
@@ -758,7 +888,7 @@ def list_dictionaries(db: Session):
     return result
 
 
-def replace_dictionary(key: str, payload: DictionaryReplace, db: Session):
+def replace_dictionary(key: str, payload: DictionaryReplace, db: Session, operator: str = "admin"):
     dictionary = db.scalar(select(Dictionary).where(Dictionary.key == key, Dictionary.is_deleted.is_(False)))
     if not dictionary:
         dictionary = Dictionary(key=key, label=payload.label or key)
@@ -814,7 +944,7 @@ def replace_dictionary(key: str, payload: DictionaryReplace, db: Session):
             ).all()
         ],
     }
-    _audit(db, entity_type="dictionary", entity_id=dictionary.key, action=action, before_data=before, after_data=after)
+    _audit(db, entity_type="dictionary", entity_id=dictionary.key, action=action, before_data=before, after_data=after, operator=operator)
     db.commit()
     return list_dictionaries(db)
 
@@ -889,6 +1019,13 @@ def dashboard(db: Session):
             Vehicle.inspection_expire_date <= lease_30_deadline,
         )
     ) or 0
+    vehicle_maintenance_due_30 = db.scalar(
+        select(func.count(Vehicle.id)).where(
+            Vehicle.is_deleted.is_(False),
+            Vehicle.maintenance_due_date.is_not(None),
+            Vehicle.maintenance_due_date <= lease_30_deadline,
+        )
+    ) or 0
 
     return {
         "dormTotal": dorm_total,
@@ -909,6 +1046,7 @@ def dashboard(db: Session):
         "disabledVehicles": disabled_vehicles,
         "vehicleInsuranceExpiring30": vehicle_insurance_expiring_30,
         "vehicleInspectionExpiring30": vehicle_inspection_expiring_30,
+        "vehicleMaintenanceDue30": vehicle_maintenance_due_30,
         "stayRiskSummary": stay_risks["riskSummary"],
         "stayExpiring30": stay_risks["expiring30"],
         "stayExpiring60": stay_risks["expiring60"],
@@ -935,7 +1073,7 @@ def alerts(db: Session):
         item = {
             "personId": person.id,
             "chineseName": person.chinese_name,
-            "englishName": person.english_name,
+        "englishName": person.english_name or "",
             "department": person.department,
             "gender": person.gender,
             "visaType": stay.visa_type,

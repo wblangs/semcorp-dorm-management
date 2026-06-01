@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api import router as api_router
+from backend.core.config import settings
 from backend.database.session import engine, run_lightweight_migrations
 from backend.models import Base
 from backend.database.session import Session
@@ -16,8 +17,8 @@ app = FastAPI(title="外派员工宿舍与通勤管理系统")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=settings.cors_origins,
+    allow_credentials=False if settings.cors_origins == ["*"] else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

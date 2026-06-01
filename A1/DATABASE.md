@@ -1,5 +1,7 @@
 # 数据库设计
 
+> Historical reference only. Drivers/Dispatch/TransportNeeds 不属于当前 MVP，暂不开发。
+
 ## Dorms
 - id
 - name

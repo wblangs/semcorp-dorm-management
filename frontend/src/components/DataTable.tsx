@@ -9,9 +9,10 @@ type DataTableProps<T> = {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string | number;
+  emptyText?: string;
 };
 
-export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, emptyText = "暂无数据" }: DataTableProps<T>) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table className="min-w-full text-left text-sm">
@@ -25,6 +26,13 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
           </tr>
         </thead>
         <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td className="px-4 py-6 text-center text-slate-500" colSpan={columns.length}>
+                {emptyText}
+              </td>
+            </tr>
+          ) : null}
           {rows.map((row) => (
             <tr key={rowKey(row)} className="border-t border-slate-100 hover:bg-slate-50">
               {columns.map((column) => (

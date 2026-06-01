@@ -1,5 +1,7 @@
 # API 设计
 
+> Historical reference only. Dispatch/司机/派车相关 API 不属于当前 MVP，暂不开发。
+
 ## Dorms
 GET /api/dorms
 POST /api/dorms

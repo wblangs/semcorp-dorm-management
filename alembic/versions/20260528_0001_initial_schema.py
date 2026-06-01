@@ -78,12 +78,10 @@ def upgrade() -> None:
             "people",
             sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
             sa.Column("chinese_name", sa.String(50), nullable=False),
-            sa.Column("english_name", sa.String(50), nullable=False),
+            sa.Column("english_name", sa.String(50), nullable=True),
             sa.Column("department", sa.String(100), nullable=False),
             sa.Column("person_type", sa.String(50), nullable=False),
             sa.Column("gender", sa.String(10), nullable=False),
-            sa.Column("can_drive", sa.Boolean(), nullable=True),
-            sa.Column("can_be_driver", sa.Boolean(), nullable=True),
             sa.Column("created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP")),
             sa.Column("updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP")),
             sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.text("0")),
@@ -104,6 +102,11 @@ def upgrade() -> None:
             sa.Column("updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP")),
             sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.text("0")),
         )
+
+    inspector = inspect(bind)
+    if _has_table(inspector, "people") and _has_column(inspector, "people", "english_name"):
+        with op.batch_alter_table("people") as batch:
+            batch.alter_column("english_name", existing_type=sa.String(50), nullable=True)
 
     inspector = inspect(bind)
     if not _has_table(inspector, "allocations"):

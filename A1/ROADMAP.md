@@ -1,5 +1,7 @@
 # 开发路线图
 
+> Historical reference only. 当前 MVP 不包含司机管理、派车安排、自动派车建议或路线优化；相关内容均为 Future Scope。
+
 ## Phase 1
 - 宿舍管理
 - 房间管理

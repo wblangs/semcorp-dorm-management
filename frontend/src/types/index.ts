@@ -21,12 +21,10 @@ export type Room = {
 export type Person = {
   id: number;
   chinese_name: string;
-  english_name: string;
+  english_name: string | null;
   department: string;
   person_type: string;
   gender: "Male" | "Female";
-  can_drive: boolean;
-  can_be_driver: boolean;
 };
 
 export type Allocation = {
@@ -73,6 +71,7 @@ export type DashboardData = {
   disabledVehicles: number;
   vehicleInsuranceExpiring30: number;
   vehicleInspectionExpiring30: number;
+  vehicleMaintenanceDue30: number;
   stayRiskSummary: {
     red: number;
     yellow: number;
@@ -89,7 +88,6 @@ export type Vehicle = {
   plate_number: string;
   seat_count: number;
   vehicle_type: string | null;
-  company: string | null;
   base_dorm_id: number | null;
   insurance_expire_date: string | null;
   inspection_expire_date: string | null;
@@ -101,7 +99,7 @@ export type Vehicle = {
 export type StayPerson = {
   id: number;
   chinese_name: string;
-  english_name: string;
+  english_name: string | null;
   department: string;
   person_type: string;
   gender: "Male" | "Female";
@@ -142,3 +140,26 @@ export type DictionaryOption = {
 };
 
 export type DictionaryState = Record<string, DictionaryOption[]>;
+
+export type User = {
+  id: number;
+  username: string;
+  display_name: string | null;
+  role: "admin" | "user";
+  status: "active" | "disabled";
+  last_login_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AuthResponse = {
+  token: string;
+  user: User;
+};
+
+export type SystemInfo = {
+  version: string;
+  database: string;
+  environment: string;
+  current_user: User;
+};

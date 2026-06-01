@@ -5,6 +5,7 @@ from .payloads import (
     DictionaryReplace,
     DormCreate,
     DormUpdate,
+    LoginRequest,
     PersonCreate,
     PersonUpdate,
     RoomCreate,
@@ -12,6 +13,9 @@ from .payloads import (
     StayUpsert,
     VehicleCreate,
     VehicleUpdate,
+    UserCreate,
+    UserPasswordReset,
+    UserUpdate,
 )
 
 __all__ = [
@@ -27,5 +31,9 @@ __all__ = [
     "DictionaryReplace",
     "VehicleCreate",
     "VehicleUpdate",
+    "LoginRequest",
+    "UserCreate",
+    "UserUpdate",
+    "UserPasswordReset",
     "StayUpsert",
 ]

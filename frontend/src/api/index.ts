@@ -2,6 +2,7 @@ import { apiRequest } from "./client";
 import type {
   Allocation,
   AvailableRoom,
+  AuthResponse,
   DashboardData,
   DictionaryState,
   Dorm,
@@ -9,6 +10,8 @@ import type {
   Room,
   StayRecord,
   StayRiskPayload,
+  SystemInfo,
+  User,
   Vehicle,
 } from "../types";
 
@@ -18,6 +21,34 @@ type NewPerson = Omit<Person, "id">;
 type NewVehicle = Omit<Vehicle, "id">;
 
 export const api = {
+  login: (payload: { username: string; password: string }) =>
+    apiRequest<AuthResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  logout: () => apiRequest<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  me: () => apiRequest<User>("/api/auth/me"),
+  getSystemInfo: () => apiRequest<SystemInfo>("/api/system"),
+
+  getUsers: () => apiRequest<User[]>("/api/users"),
+  createUser: (payload: {
+    username: string;
+    password: string;
+    display_name?: string | null;
+    role: "admin" | "user";
+    status: "active" | "disabled";
+  }) => apiRequest<User>("/api/users", { method: "POST", body: JSON.stringify(payload) }),
+  updateUser: (
+    id: number,
+    payload: {
+      display_name?: string | null;
+      role?: "admin" | "user";
+      status?: "active" | "disabled";
+    },
+  ) => apiRequest<User>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  resetUserPassword: (id: number, password: string) =>
+    apiRequest<{ updated: boolean }>(`/api/users/${id}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+
   getDashboard: () => apiRequest<DashboardData>("/api/dashboard"),
 
   getDictionaries: () => apiRequest<DictionaryState>("/api/dictionaries"),

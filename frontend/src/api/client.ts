@@ -1,4 +1,5 @@
 const API_BASE = "";
+const AUTH_TOKEN_KEY = "semcorpAuthToken";
 
 export class ApiError extends Error {
   status: number;
@@ -9,10 +10,24 @@ export class ApiError extends Error {
   }
 }
 
+export function getAuthToken() {
+  return window.localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string) {
+  window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
     ...init,

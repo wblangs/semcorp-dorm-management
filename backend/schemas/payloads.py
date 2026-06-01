@@ -42,12 +42,10 @@ class RoomUpdate(BaseModel):
 
 class PersonCreate(BaseModel):
     chinese_name: str
-    english_name: str
+    english_name: Optional[str] = None
     department: str
     person_type: str
     gender: Literal["Male", "Female"]
-    can_drive: bool = False
-    can_be_driver: bool = False
 
 
 class PersonUpdate(BaseModel):
@@ -56,8 +54,6 @@ class PersonUpdate(BaseModel):
     department: Optional[str] = None
     person_type: Optional[str] = None
     gender: Optional[Literal["Male", "Female"]] = None
-    can_drive: Optional[bool] = None
-    can_be_driver: Optional[bool] = None
 
 
 class AllocationCreate(BaseModel):
@@ -85,7 +81,6 @@ class VehicleCreate(BaseModel):
     plate_number: str
     seat_count: int = Field(gt=0)
     vehicle_type: Optional[str] = None
-    company: Optional[str] = None
     base_dorm_id: Optional[int] = None
     insurance_expire_date: Optional[date] = None
     inspection_expire_date: Optional[date] = None
@@ -98,13 +93,35 @@ class VehicleUpdate(BaseModel):
     plate_number: Optional[str] = None
     seat_count: Optional[int] = Field(default=None, gt=0)
     vehicle_type: Optional[str] = None
-    company: Optional[str] = None
     base_dorm_id: Optional[int] = None
     insurance_expire_date: Optional[date] = None
     inspection_expire_date: Optional[date] = None
     maintenance_due_date: Optional[date] = None
     note: Optional[str] = None
     status: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    display_name: Optional[str] = None
+    role: Literal["admin", "user"] = "user"
+    status: Literal["active", "disabled"] = "active"
+
+
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+    role: Optional[Literal["admin", "user"]] = None
+    status: Optional[Literal["active", "disabled"]] = None
+
+
+class UserPasswordReset(BaseModel):
+    password: str
 
 
 class StayUpsert(BaseModel):

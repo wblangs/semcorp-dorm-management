@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { api } from "../api";
+import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
+import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Room } from "../types";
 
@@ -24,6 +26,7 @@ const emptyForm: RoomFormState = {
 };
 
 export function RoomsPage() {
+  const { isAdmin } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Room[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
@@ -107,7 +110,8 @@ export function RoomsPage() {
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">房间管理</h2>
       <form onSubmit={onSubmit} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-3">
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.dorm_id} onChange={(e) => setForm((f) => ({ ...f, dorm_id: e.target.value }))} required>
+        <FormField label="宿舍" required>
+        <select className={fieldControlClass} value={form.dorm_id} onChange={(e) => setForm((f) => ({ ...f, dorm_id: e.target.value }))} required>
           <option value="">选择宿舍</option>
           {dorms.map((dorm) => (
             <option key={dorm.id} value={dorm.id}>
@@ -115,33 +119,44 @@ export function RoomsPage() {
             </option>
           ))}
         </select>
-        <input className="rounded-lg border border-slate-300 px-3 py-2" placeholder="房间名" value={form.room_name} onChange={(e) => setForm((f) => ({ ...f, room_name: e.target.value }))} required />
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.room_type} onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))} required>
+        </FormField>
+        <FormField label="房间名" required>
+          <input className={fieldControlClass} value={form.room_name} onChange={(e) => setForm((f) => ({ ...f, room_name: e.target.value }))} required />
+        </FormField>
+        <FormField label="房间类型" required>
+        <select className={fieldControlClass} value={form.room_type} onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))} required>
           {dictionaries.roomTypes.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
-        <input className="rounded-lg border border-slate-300 px-3 py-2" type="number" min={1} value={form.bed_count} onChange={(e) => setForm((f) => ({ ...f, bed_count: Number(e.target.value) }))} required />
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.gender_limit} onChange={(e) => setForm((f) => ({ ...f, gender_limit: e.target.value as "Male" | "Female" | "Any" }))}>
+        </FormField>
+        <FormField label="床位数" required>
+          <input className={fieldControlClass} type="number" min={1} value={form.bed_count} onChange={(e) => setForm((f) => ({ ...f, bed_count: Number(e.target.value) }))} required />
+        </FormField>
+        <FormField label="性别限制">
+        <select className={fieldControlClass} value={form.gender_limit} onChange={(e) => setForm((f) => ({ ...f, gender_limit: e.target.value as "Male" | "Female" | "Any" }))}>
           <option value="Any">Any</option>
           <option value="Male">Male</option>
           <option value="Female">Female</option>
         </select>
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} required>
+        </FormField>
+        <FormField label="状态" required>
+        <select className={fieldControlClass} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} required>
           {dictionaries.statuses.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
         </select>
-        <button className="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white hover:bg-slate-700" type="submit">
+        </FormField>
+        <button className={primaryButtonClass} type="submit">
           {editingId ? "保存房间" : "新增房间"}
         </button>
         {editingId ? (
           <button
-            className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+            className={secondaryButtonClass}
             type="button"
             onClick={() => {
               setEditingId(null);
@@ -172,12 +187,14 @@ export function RoomsPage() {
               header: "操作",
               cell: (row) => (
                 <div className="flex gap-2">
-                  <button className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100" type="button" onClick={() => onEdit(row)}>
+                  <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
                     修改
                   </button>
-                  <button className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50" type="button" onClick={() => void onDelete(row)}>
-                    删除
-                  </button>
+                  {isAdmin ? (
+                    <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
+                      删除
+                    </button>
+                  ) : null}
                 </div>
               ),
             },

@@ -1,10 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
+import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
+import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import type { Allocation, AvailableRoom, Dorm, Person, Room } from "../types";
 
 export function AllocationPage() {
+  const { isAdmin } = useAuth();
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
@@ -152,7 +155,7 @@ export function AllocationPage() {
   };
 
   const personMap = new Map(
-    people.map((person) => [person.id, `${person.chinese_name}/${person.english_name}`]),
+    people.map((person) => [person.id, `${person.chinese_name}/${person.english_name || "-"}`]),
   );
   const dormMap = new Map(dorms.map((dorm) => [dorm.id, dorm.name]));
   const roomMap = new Map(rooms.map((room) => [room.id, room.room_name]));
@@ -164,21 +167,26 @@ export function AllocationPage() {
         onSubmit={onSubmit}
         className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4"
       >
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.person_id} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} required disabled={Boolean(editingId)}>
+        <FormField label="人员" required>
+        <select className={fieldControlClass} value={form.person_id} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} required disabled={Boolean(editingId)}>
           {people.map((person) => (
             <option key={person.id} value={person.id}>
-              {person.chinese_name}/{person.english_name} (#{person.id})
+              {person.chinese_name}/{person.english_name || "-"} (#{person.id})
             </option>
           ))}
         </select>
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.dorm_id} onChange={(e) => setForm((f) => ({ ...f, dorm_id: e.target.value }))} required>
+        </FormField>
+        <FormField label="宿舍" required>
+        <select className={fieldControlClass} value={form.dorm_id} onChange={(e) => setForm((f) => ({ ...f, dorm_id: e.target.value }))} required>
           {dorms.map((dorm) => (
             <option key={dorm.id} value={dorm.id}>
               {dorm.name} (#{dorm.id})
             </option>
           ))}
         </select>
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.room_id} onChange={(e) => setForm((f) => ({ ...f, room_id: e.target.value }))} required>
+        </FormField>
+        <FormField label="房间" required>
+        <select className={fieldControlClass} value={form.room_id} onChange={(e) => setForm((f) => ({ ...f, room_id: e.target.value }))} required>
           {roomOptions.map((room) => (
             <option key={room.id} value={room.id}>
               {room.room_name} (#{room.id})
@@ -186,27 +194,27 @@ export function AllocationPage() {
             </option>
           ))}
         </select>
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          <span>入住日期</span>
-          <input className="w-full rounded-lg border border-slate-300 px-3 py-2 font-normal text-slate-900" type="date" value={form.check_in_date} onChange={(e) => setForm((f) => ({ ...f, check_in_date: e.target.value }))} required />
-        </label>
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          <span>预计退宿日期</span>
+        </FormField>
+        <FormField label="入住日期" required>
+          <input className={fieldControlClass} type="date" value={form.check_in_date} onChange={(e) => setForm((f) => ({ ...f, check_in_date: e.target.value }))} required />
+        </FormField>
+        <FormField label="预计退宿日期">
           <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 font-normal text-slate-900"
+            className={fieldControlClass}
             type="date"
             value={form.expected_check_out_date}
             onChange={(e) => setForm((f) => ({ ...f, expected_check_out_date: e.target.value }))}
           />
-        </label>
-        <input
-          className="rounded-lg border border-slate-300 px-3 py-2 md:col-span-2"
-          placeholder="备注"
-          value={form.note}
-          onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-        />
+        </FormField>
+        <FormField label="备注" className="md:col-span-2">
+          <input
+            className={fieldControlClass}
+            value={form.note}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+          />
+        </FormField>
         <button
-          className="rounded-lg bg-slate-900 px-3 py-2 font-medium text-white hover:bg-slate-700 md:col-span-4"
+          className={`${primaryButtonClass} md:col-span-4`}
           type="submit"
           disabled={submitting}
         >
@@ -214,7 +222,7 @@ export function AllocationPage() {
         </button>
         {editingId ? (
           <button
-            className="rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-700 hover:bg-slate-100 md:col-span-4"
+            className={`${secondaryButtonClass} md:col-span-4`}
             type="button"
             onClick={() => {
               setEditingId(null);
@@ -236,7 +244,7 @@ export function AllocationPage() {
           <h3 className="mb-2 text-sm font-semibold text-slate-800">人员信息</h3>
           {selectedPerson ? (
             <div className="space-y-1 text-sm text-slate-700">
-              <div>姓名：{selectedPerson.chinese_name}/{selectedPerson.english_name}</div>
+              <div>姓名：{selectedPerson.chinese_name}/{selectedPerson.english_name || "-"}</div>
               <div>部门：{selectedPerson.department}</div>
               <div>性别：{selectedPerson.gender}</div>
               <div>人员类型：{selectedPerson.person_type}</div>
@@ -290,7 +298,7 @@ export function AllocationPage() {
                 <div className="flex gap-2">
                   {row.status === "active" ? (
                     <button
-                      className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+                      className={editButtonClass}
                       type="button"
                       onClick={() => onEdit(row)}
                     >
@@ -299,7 +307,7 @@ export function AllocationPage() {
                   ) : null}
                   {row.status === "active" ? (
                   <button
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+                    className={editButtonClass}
                     type="button"
                     onClick={async () => {
                       try {
@@ -313,13 +321,15 @@ export function AllocationPage() {
                     退房
                   </button>
                   ) : null}
-                  <button
-                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                    type="button"
-                    onClick={() => void onDelete(row)}
-                  >
-                    删除
-                  </button>
+                  {isAdmin ? (
+                    <button
+                      className={deleteButtonClass}
+                      type="button"
+                      onClick={() => void onDelete(row)}
+                    >
+                      删除
+                    </button>
+                  ) : null}
                 </div>
               ),
             },

@@ -7,6 +7,18 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base, TimestampSoftDeleteMixin
 
 
+class User(TimestampSoftDeleteMixin, Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    role: Mapped[str] = mapped_column(String(40), default="user", nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class Dorm(TimestampSoftDeleteMixin, Base):
     __tablename__ = "dorms"
 
@@ -41,13 +53,10 @@ class Person(TimestampSoftDeleteMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     chinese_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    english_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    english_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     department: Mapped[str] = mapped_column(String(100), nullable=False)
     person_type: Mapped[str] = mapped_column(String(50), nullable=False)
     gender: Mapped[Literal["Male", "Female"]] = mapped_column(String(10), nullable=False)
-    can_drive: Mapped[bool] = mapped_column(default=False)
-    can_be_driver: Mapped[bool] = mapped_column(default=False)
-
     stay: Mapped[Optional["Stay"]] = relationship(
         back_populates="person", uselist=False, cascade="all, delete-orphan"
     )

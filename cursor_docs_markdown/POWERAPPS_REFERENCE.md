@@ -1,5 +1,7 @@
 # Power Apps 参考
 
+> Historical reference only. Drivers、TransportNeeds、Dispatch 相关表属于 Future Scope，不纳入当前 MVP。
+
 ## Excel 导入表
 - tbl_Dorms
 - tbl_Rooms

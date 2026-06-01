@@ -6,6 +6,7 @@ import {
 } from "../dictionaries";
 import type { DictionaryKey, DictionaryOption } from "../dictionaries";
 import { api } from "../api";
+import { deleteButtonClass, fieldControlClass, FormField, primaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
 
 const dictionaryKeys = Object.keys(dictionaryLabels) as DictionaryKey[];
@@ -86,9 +87,10 @@ export function DictionariesPage() {
             <h3 className="mb-3 text-sm font-semibold text-slate-800">{dictionaryLabels[key]}</h3>
             <div className="mb-3 space-y-2">
               {dictionaries[key].map((option, index) => (
-                <div key={`${option.value}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                <div key={`${option.value}-${index}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
+                  <FormField label="显示名称">
                   <input
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    className={fieldControlClass}
                     value={option.label}
                     aria-label={`${dictionaryLabels[key]}显示名称`}
                     onChange={(event) => {
@@ -98,8 +100,10 @@ export function DictionariesPage() {
                       void updateDictionary(key, options);
                     }}
                   />
+                  </FormField>
+                  <FormField label="保存值">
                   <input
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    className={fieldControlClass}
                     value={option.value}
                     aria-label={`${dictionaryLabels[key]}保存值`}
                     onChange={(event) => {
@@ -109,8 +113,9 @@ export function DictionariesPage() {
                       void updateDictionary(key, options);
                     }}
                   />
+                  </FormField>
                   <button
-                    className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                    className={`${deleteButtonClass} self-end rounded-lg px-3 py-2 text-sm`}
                     type="button"
                     onClick={() => void updateDictionary(key, dictionaries[key].filter((_, itemIndex) => itemIndex !== index))}
                   >
@@ -120,24 +125,26 @@ export function DictionariesPage() {
               ))}
             </div>
 
-            <form onSubmit={(event) => onAdd(event, key)} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+            <form onSubmit={(event) => onAdd(event, key)} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
+              <FormField label="新增显示名称">
               <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="显示名称"
+                className={fieldControlClass}
                 value={drafts[key].label}
                 onChange={(event) =>
                   setDrafts((current) => ({ ...current, [key]: { ...current[key], label: event.target.value } }))
                 }
               />
+              </FormField>
+              <FormField label="新增保存值">
               <input
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                placeholder="保存值"
+                className={fieldControlClass}
                 value={drafts[key].value}
                 onChange={(event) =>
                   setDrafts((current) => ({ ...current, [key]: { ...current[key], value: event.target.value } }))
                 }
               />
-              <button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">
+              </FormField>
+              <button className={`${primaryButtonClass} self-end`} type="submit">
                 新增
               </button>
             </form>
