@@ -2,15 +2,13 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api import router as api_router
 from backend.core.config import settings
-from backend.database.session import engine, run_lightweight_migrations
+from backend.database.session import engine, run_lightweight_migrations, Session
 from backend.models import Base
-from backend.database.session import Session
 from backend.services.management import seed_default_dictionaries
 
 app = FastAPI(title="外派员工宿舍与通勤管理系统")
@@ -26,8 +24,27 @@ app.add_middleware(
 app.include_router(api_router)
 
 frontend_dist = Path("frontend/dist")
+
 if frontend_dist.exists():
-    app.mount("/ui", StaticFiles(directory=str(frontend_dist), html=True), name="ui")
+    # ✅ CHANGED: 不要 mount 整个 /ui
+    # 只挂载前端静态资源 assets
+    app.mount(
+        "/ui/assets",
+        StaticFiles(directory=str(frontend_dist / "assets")),
+        name="ui-assets",
+    )
+
+    # ✅ ADDED: /ui 和 /ui/ 都返回 React 首页
+    @app.get("/ui", response_class=HTMLResponse)
+    @app.get("/ui/", response_class=HTMLResponse)
+    def serve_ui_root():
+        return (frontend_dist / "index.html").read_text(encoding="utf-8")
+
+    # ✅ ADDED: /ui/xxx 刷新时也返回 React 首页
+    @app.get("/ui/{full_path:path}", response_class=HTMLResponse)
+    def serve_ui_routes(full_path: str):
+        return (frontend_dist / "index.html").read_text(encoding="utf-8")
+
 else:
     @app.get("/ui", response_class=HTMLResponse)
     @app.get("/ui/{_:path}", response_class=HTMLResponse)

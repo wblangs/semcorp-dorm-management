@@ -15,6 +15,7 @@ import { StayPage } from "./pages/StayPage";
 import { SystemPage } from "./pages/SystemPage";
 import { UsersPage } from "./pages/UsersPage";
 import { VehiclesPage } from "./pages/VehiclesPage";
+import { CheckInRecordsPage } from "./pages/CheckInRecordsPage";
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -46,6 +47,8 @@ function AppRoutes() {
         <Route path="/people" element={<PeoplePage />} />
         <Route path="/stay" element={<StayPage />} />
         <Route path="/allocations" element={<AllocationPage />} />
+        <Route path="/check-in-records" element={<CheckInRecordsPage />} />
+
         <Route path="/vehicles" element={<VehiclesPage />} />
         <Route
           path="/dictionaries"

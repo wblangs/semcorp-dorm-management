@@ -10,6 +10,7 @@ const navItems = [
   { to: "/people", label: "人员" },
   { to: "/stay", label: "停留风险" },
   { to: "/allocations", label: "入住分配" },
+  { to: "/check-in-records", label: "入住记录" },
   { to: "/vehicles", label: "车辆" },
   { to: "/dictionaries", label: "字典", adminOnly: true },
   { to: "/users", label: "用户管理", adminOnly: true },

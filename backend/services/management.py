@@ -717,8 +717,8 @@ def delete_allocation(allocation_id: int, db: Session, operator: str = "admin"):
         raise HTTPException(status_code=404, detail="入住记录不存在")
     if allocation.status == "active":
         raise HTTPException(status_code=400, detail="active 入住记录不能直接删除，请先退房")
-    if allocation.status not in {"cancelled", "draft"}:
-        raise HTTPException(status_code=400, detail="仅 cancelled 或 draft 入住记录允许删除")
+    if allocation.status not in {"cancelled", "draft","checked_out"}:
+        raise HTTPException(status_code=400, detail="仅 cancelled 或 draft 或 checked_out入住记录允许删除")
     before = _model_data(allocation)
     allocation.is_deleted = True
     db.flush()
