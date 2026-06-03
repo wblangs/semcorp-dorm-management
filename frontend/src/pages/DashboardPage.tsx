@@ -7,6 +7,7 @@ import type { DashboardData } from "../types";
 export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string>("");
+  const [showRenewalDorms, setShowRenewalDorms] = useState(false);
 
   useEffect(() => {
     api
@@ -46,7 +47,21 @@ export function DashboardPage() {
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">Dashboard</h2>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {/* ✅ 单独写续租按钮，不放进 cards.map */}
+        <button
+          type="button"
+          onClick={() => setShowRenewalDorms((value) => !value)}
+          className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-left shadow-sm transition hover:border-orange-300 hover:bg-orange-100"
+        >
+          <p className="text-sm text-slate-500">需要续租宿舍数(&lt;=90天)</p>
+          <p className="mt-1 text-2xl font-bold">{data.leaseExpiring90 ?? 0}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {showRenewalDorms ? "点击收起详情" : "点击查看详情"}
+          </p>
+        </button>
+
         {cards.map((card) => {
           const content = (
             <>
@@ -54,8 +69,13 @@ export function DashboardPage() {
               <p className="mt-1 text-2xl font-bold">{card.value}</p>
             </>
           );
+
           return card.to ? (
-            <Link key={card.label} to={card.to} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
+            <Link
+              key={card.label}
+              to={card.to}
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
               {content}
             </Link>
           ) : (
@@ -65,6 +85,48 @@ export function DashboardPage() {
           );
         })}
       </div>
+
+      {showRenewalDorms ? (
+        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">90天内需要续租的宿舍</h3>
+
+          {(data.renewalNeededDorms ?? []).length === 0 ? (
+            <p className="text-sm text-slate-500">暂无需要续租的宿舍</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-slate-200 text-slate-600">
+                  <tr>
+                    <th className="px-3 py-2">ID</th>
+                    <th className="px-3 py-2">宿舍名称</th>
+                    <th className="px-3 py-2">地址</th>
+                    <th className="px-3 py-2">类型</th>
+                    <th className="px-3 py-2">状态</th>
+                    <th className="px-3 py-2">租约开始</th>
+                    <th className="px-3 py-2">租约到期</th>
+                    <th className="px-3 py-2">剩余天数</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {(data.renewalNeededDorms ?? []).map((dorm) => (
+                    <tr key={dorm.id} className="border-b border-slate-100">
+                      <td className="px-3 py-2">{dorm.id}</td>
+                      <td className="px-3 py-2">{dorm.name}</td>
+                      <td className="px-3 py-2">{dorm.address ?? "-"}</td>
+                      <td className="px-3 py-2">{dorm.type ?? "-"}</td>
+                      <td className="px-3 py-2">{dorm.status ?? "-"}</td>
+                      <td className="px-3 py-2">{dorm.lease_start_date ?? "-"}</td>
+                      <td className="px-3 py-2">{dorm.lease_end_date ?? "-"}</td>
+                      <td className="px-3 py-2">{dorm.days_left}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -78,6 +140,7 @@ export function DashboardPage() {
             {data.stayExpiring30.length === 0 ? <li>暂无</li> : null}
           </ul>
         </article>
+
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-slate-700">未来60天最大停留到期</h3>
           <ul className="space-y-1 text-sm text-slate-600">
@@ -89,12 +152,14 @@ export function DashboardPage() {
             {data.stayExpiring60.length === 0 ? <li>暂无</li> : null}
           </ul>
         </article>
+
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-slate-700">已超期未离美</h3>
           <ul className="space-y-1 text-sm text-slate-600">
             {data.stayOverstayed.slice(0, 10).map((item) => (
               <li key={`over-${item.person_id}`}>
-                {item.person.chinese_name}/{item.person.english_name || "-"} - 超期 {Math.abs(item.remaining_legal_days ?? 0)} 天
+                {item.person.chinese_name}/{item.person.english_name || "-"} - 超期{" "}
+                {Math.abs(item.remaining_legal_days ?? 0)} 天
               </li>
             ))}
             {data.stayOverstayed.length === 0 ? <li>暂无</li> : null}

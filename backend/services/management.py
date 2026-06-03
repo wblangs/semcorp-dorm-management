@@ -998,13 +998,37 @@ def dashboard(db: Session):
 
     lease_30_deadline = today + timedelta(days=30)
     lease_60_deadline = today + timedelta(days=60)
+
+    # ✅ ADDED: 90天内需要续租
+    lease_90_deadline = today + timedelta(days=90)
+
     dorms = db.scalars(_active_stmt(Dorm)).all()
+
     lease_expiring_30 = sum(
         1 for dorm in dorms if dorm.lease_end_date is not None and dorm.lease_end_date <= lease_30_deadline
     )
+
     lease_expiring_60 = sum(
         1 for dorm in dorms if dorm.lease_end_date is not None and dorm.lease_end_date <= lease_60_deadline
     )
+
+    # ✅ ADDED: 90天内需要续租的宿舍详情
+    renewal_needed_dorms = [
+        {
+            "id": dorm.id,
+            "name": dorm.name,
+            "address": dorm.address,
+            "type": dorm.type,
+            "status": dorm.status,
+            "lease_start_date": dorm.lease_start_date,
+            "lease_end_date": dorm.lease_end_date,
+            "days_left": (dorm.lease_end_date - today).days,
+        }
+        for dorm in dorms
+        if dorm.lease_end_date is not None and dorm.lease_end_date <= lease_90_deadline
+    ]
+
+    renewal_needed_dorms.sort(key=lambda item: item["days_left"])
     vehicle_insurance_expiring_30 = db.scalar(
         select(func.count(Vehicle.id)).where(
             Vehicle.is_deleted.is_(False),
@@ -1041,6 +1065,8 @@ def dashboard(db: Session):
         "riskUnknown": risk_unknown,
         "leaseExpiring30": lease_expiring_30,
         "leaseExpiring60": lease_expiring_60,
+        "leaseExpiring90": len(renewal_needed_dorms),
+        "renewalNeededDorms": renewal_needed_dorms,
         "availableVehicles": available_vehicles,
         "maintenanceVehicles": maintenance_vehicles,
         "disabledVehicles": disabled_vehicles,

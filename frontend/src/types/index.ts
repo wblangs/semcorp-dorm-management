@@ -8,6 +8,17 @@ export type Dorm = {
   status: string;
 };
 
+export type RenewalNeededDorm = {
+  id: number;
+  name: string;
+  address: string | null;
+  type: string | null;
+  status: string | null;
+  lease_start_date: string | null;
+  lease_end_date: string | null;
+  days_left: number;
+};
+
 export type Room = {
   id: number;
   dorm_id: number;
@@ -66,6 +77,8 @@ export type DashboardData = {
   riskUnknown: number;
   leaseExpiring30: number;
   leaseExpiring60: number;
+  leaseExpiring90: number;
+  renewalNeededDorms: RenewalNeededDorm[];
   availableVehicles: number;
   maintenanceVehicles: number;
   disabledVehicles: number;
