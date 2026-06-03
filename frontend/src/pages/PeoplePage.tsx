@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
@@ -52,6 +52,7 @@ export function PeoplePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   const load = async () => {
     try {
@@ -173,6 +174,34 @@ export function PeoplePage() {
     return "未维护";
   };
 
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return rows;
+    return rows.filter((row) => {
+      const stay = stayMap.get(row.id);
+      const risk = riskLabel(stay?.risk_level ?? "unknown");
+      const allocationStatus = activeAllocationPersonIds.has(row.id) ? "在住" : "未入住";
+      return [
+        row.id,
+        row.chinese_name,
+        row.english_name,
+        row.department,
+        row.person_type,
+        row.gender,
+        risk,
+        allocationStatus,
+        stay?.visa_type,
+        stay?.arrival_date,
+        stay?.planned_leave_date,
+        stay?.max_stay_date,
+        stay?.actual_leave_date,
+        stay?.note,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(keyword));
+    });
+  }, [activeAllocationPersonIds, rows, search, stayMap]);
+
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">人员管理</h2>
@@ -261,9 +290,17 @@ export function PeoplePage() {
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
+        <div className="space-y-2">
+          <input
+            className={fieldControlClass}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索人员记录"
+          />
         <DataTable
-          rows={rows}
+          rows={filteredRows}
           rowKey={(row) => row.id}
+          emptyText="没有匹配记录"
           columns={[
             { header: "中文名", cell: (row) => row.chinese_name },
             { header: "英文名", cell: (row) => row.english_name || "-" },
@@ -302,6 +339,7 @@ export function PeoplePage() {
             },
           ]}
         />
+        </div>
       )}
     </section>
   );

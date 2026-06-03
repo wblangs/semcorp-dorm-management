@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { LanguageBoundary, LanguageProvider } from "./i18n";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { AllocationPage } from "./pages/AllocationPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -78,8 +79,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <LanguageBoundary>
+          <AppRoutes />
+        </LanguageBoundary>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

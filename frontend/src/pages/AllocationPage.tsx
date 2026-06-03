@@ -6,6 +6,38 @@ import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import type { Allocation, AvailableRoom, Dorm, Person, Room } from "../types";
 
+type Occupant = {
+  id: number;
+  name: string;
+  gender: Person["gender"];
+};
+
+type RoomAvailabilityRow = {
+  id: number;
+  dormId: number;
+  dormName: string;
+  roomName: string;
+  bedCount: number;
+  activeOccupancy: number;
+  availableBeds: number;
+  genderLimit: Room["gender_limit"];
+  occupants: Occupant[];
+};
+
+type DormGenderRow = {
+  id: number;
+  dormName: string;
+  genderStatus: "Empty" | "Mixed" | "Pure Male" | "Pure Female";
+  maleCount: number;
+  femaleCount: number;
+  activeOccupancy: number;
+  availableBeds: number;
+};
+
+type DormAvailabilityGroup = DormGenderRow & {
+  rooms: RoomAvailabilityRow[];
+};
+
 export function AllocationPage() {
   const { isAdmin } = useAuth();
   const [allocations, setAllocations] = useState<Allocation[]>([]);
@@ -17,6 +49,8 @@ export function AllocationPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [expandedDormIds, setExpandedDormIds] = useState<Set<number>>(new Set());
+  const [allocationSearch, setAllocationSearch] = useState("");
   const [form, setForm] = useState({
     person_id: "",
     dorm_id: "",
@@ -41,7 +75,6 @@ export function AllocationPage() {
       setRooms(r);
       setForm((f) => ({
         ...f,
-        person_id: f.person_id || String(p[0]?.id ?? ""),
         dorm_id: f.dorm_id || String(d[0]?.id ?? ""),
       }));
     } catch (err) {
@@ -79,10 +112,37 @@ export function AllocationPage() {
       });
   }, [editingId, form.person_id, form.dorm_id]);
 
+  const personMap = useMemo(
+    () => new Map(people.map((person) => [person.id, `${person.chinese_name}/${person.english_name || "-"}`])),
+    [people],
+  );
+  const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
+  const roomMap = useMemo(() => new Map(rooms.map((room) => [room.id, room.room_name])), [rooms]);
   const selectedPerson = useMemo(
     () => people.find((person) => String(person.id) === form.person_id) ?? null,
     [people, form.person_id],
   );
+  const activeAllocatedPersonIds = useMemo(
+    () =>
+      new Set(
+        allocations
+          .filter((allocation) => allocation.status === "active")
+          .map((allocation) => allocation.person_id),
+      ),
+    [allocations],
+  );
+  const unassignedPeople = useMemo(
+    () => people.filter((person) => !activeAllocatedPersonIds.has(person.id)),
+    [activeAllocatedPersonIds, people],
+  );
+  const assignablePeople = useMemo(() => {
+    if (!editingId) return unassignedPeople;
+    const currentPerson = people.find((person) => String(person.id) === form.person_id);
+    if (!currentPerson || unassignedPeople.some((person) => person.id === currentPerson.id)) {
+      return unassignedPeople;
+    }
+    return [currentPerson, ...unassignedPeople];
+  }, [editingId, form.person_id, people, unassignedPeople]);
   const roomOptions = useMemo(() => {
     if (!editingId) return availableRooms;
     return rooms.filter((room) => String(room.dorm_id) === form.dorm_id);
@@ -91,6 +151,130 @@ export function AllocationPage() {
     () => roomOptions.find((room) => String(room.id) === form.room_id) ?? null,
     [form.room_id, roomOptions],
   );
+  const activeAllocations = useMemo(
+    () => allocations.filter((allocation) => allocation.status === "active"),
+    [allocations],
+  );
+  const personById = useMemo(
+    () => new Map(people.map((person) => [person.id, person])),
+    [people],
+  );
+  const roomOccupantsByRoomId = useMemo(() => {
+    const grouped = new Map<number, Occupant[]>();
+    activeAllocations.forEach((allocation) => {
+      const person = personById.get(allocation.person_id);
+      if (!person) return;
+      const occupant = {
+        id: person.id,
+        name: `${person.chinese_name}/${person.english_name || "-"}`,
+        gender: person.gender,
+      };
+      grouped.set(allocation.room_id, [...(grouped.get(allocation.room_id) ?? []), occupant]);
+    });
+    return grouped;
+  }, [activeAllocations, personById]);
+  const roomAvailabilityRows = useMemo<RoomAvailabilityRow[]>(
+    () =>
+      rooms
+        .map((room) => {
+          const occupants = roomOccupantsByRoomId.get(room.id) ?? [];
+          return {
+            id: room.id,
+            dormId: room.dorm_id,
+            dormName: dormMap.get(room.dorm_id) ?? "Unknown",
+            roomName: room.room_name,
+            bedCount: room.bed_count,
+            activeOccupancy: occupants.length,
+            availableBeds: Math.max(room.bed_count - occupants.length, 0),
+            genderLimit: room.gender_limit,
+            occupants,
+          };
+        })
+        .filter((room) => room.availableBeds > 0),
+    [dormMap, roomOccupantsByRoomId, rooms],
+  );
+  const dormGenderRows = useMemo<DormGenderRow[]>(
+    () =>
+      dorms.map((dorm) => {
+        const dormRooms = rooms.filter((room) => room.dorm_id === dorm.id);
+        const occupants = dormRooms.flatMap((room) => roomOccupantsByRoomId.get(room.id) ?? []);
+        const genders = new Set(occupants.map((occupant) => occupant.gender));
+        const maleCount = occupants.filter((occupant) => occupant.gender === "Male").length;
+        const femaleCount = occupants.filter((occupant) => occupant.gender === "Female").length;
+        const availableBeds = dormRooms.reduce(
+          (total, room) => total + Math.max(room.bed_count - (roomOccupantsByRoomId.get(room.id)?.length ?? 0), 0),
+          0,
+        );
+        const genderStatus =
+          genders.size === 0
+            ? "Empty"
+            : genders.has("Male") && genders.has("Female")
+              ? "Mixed"
+              : genders.has("Male")
+                ? "Pure Male"
+                : "Pure Female";
+        return {
+          id: dorm.id,
+          dormName: dorm.name,
+          genderStatus,
+          maleCount,
+          femaleCount,
+          activeOccupancy: occupants.length,
+          availableBeds,
+        };
+      }),
+    [dorms, roomOccupantsByRoomId, rooms],
+  );
+  const dormAvailabilityGroups = useMemo<DormAvailabilityGroup[]>(
+    () =>
+      dormGenderRows.map((dorm) => ({
+        ...dorm,
+        rooms: roomAvailabilityRows.filter((room) => room.dormId === dorm.id),
+      })),
+    [dormGenderRows, roomAvailabilityRows],
+  );
+  const selectedRoomOccupants = useMemo(
+    () => (selectedRoom ? roomOccupantsByRoomId.get(selectedRoom.id) ?? [] : []),
+    [roomOccupantsByRoomId, selectedRoom],
+  );
+  const filteredAllocations = useMemo(() => {
+    const keyword = allocationSearch.trim().toLowerCase();
+    if (!keyword) return allocations;
+    return allocations.filter((allocation) =>
+      [
+        allocation.id,
+        allocation.person_id,
+        personMap.get(allocation.person_id),
+        allocation.dorm_id,
+        dormMap.get(allocation.dorm_id),
+        allocation.room_id,
+        roomMap.get(allocation.room_id),
+        allocation.check_in_date,
+        allocation.expected_check_out_date,
+        allocation.actual_check_out_date,
+        allocation.check_out_date,
+        allocation.note,
+        allocation.status === "active" ? "在住" : "已退宿",
+        allocation.status,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  }, [allocationSearch, allocations, dormMap, personMap, roomMap]);
+
+  useEffect(() => {
+    if (editingId) return;
+    setForm((f) => {
+      if (f.person_id && unassignedPeople.some((person) => String(person.id) === f.person_id)) {
+        return f;
+      }
+      return {
+        ...f,
+        person_id: String(unassignedPeople[0]?.id ?? ""),
+        room_id: "",
+      };
+    });
+  }, [editingId, unassignedPeople]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -154,22 +338,117 @@ export function AllocationPage() {
     }
   };
 
-  const personMap = new Map(
-    people.map((person) => [person.id, `${person.chinese_name}/${person.english_name || "-"}`]),
-  );
-  const dormMap = new Map(dorms.map((dorm) => [dorm.id, dorm.name]));
-  const roomMap = new Map(rooms.map((room) => [room.id, room.room_name]));
+  const formatOccupants = (occupants: Occupant[]) =>
+    occupants.length
+      ? occupants.map((occupant) => `${occupant.name} (${occupant.gender}, #${occupant.id})`).join("; ")
+      : "Empty";
+  const toggleDorm = (dormId: number) => {
+    setExpandedDormIds((current) => {
+      const next = new Set(current);
+      if (next.has(dormId)) {
+        next.delete(dormId);
+      } else {
+        next.add(dormId);
+      }
+      return next;
+    });
+  };
+  const renderDormMixChart = (group: DormAvailabilityGroup) => {
+    const totalBeds = group.maleCount + group.femaleCount + group.availableBeds;
+    const malePercent = totalBeds ? (group.maleCount / totalBeds) * 100 : 0;
+    const femalePercent = totalBeds ? (group.femaleCount / totalBeds) * 100 : 0;
+    const emptyPercent = totalBeds ? (group.availableBeds / totalBeds) * 100 : 0;
+    const femaleStop = malePercent + femalePercent;
+    const background = totalBeds
+      ? `conic-gradient(#2563eb 0 ${malePercent}%, #db2777 ${malePercent}% ${femaleStop}%, #cbd5e1 ${femaleStop}% 100%)`
+      : "#e2e8f0";
+
+    return (
+      <span
+        aria-label={`Male ${Math.round(malePercent)}%, Female ${Math.round(femalePercent)}%, Empty ${Math.round(emptyPercent)}%`}
+        className="inline-block rounded-full border border-white shadow-sm"
+        style={{ width: "1em", height: "1em", background }}
+        title={`Male ${Math.round(malePercent)}%, Female ${Math.round(femalePercent)}%, Empty ${Math.round(emptyPercent)}%`}
+      />
+    );
+  };
 
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">入住分配</h2>
+      {loading ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">加载未分配人员中...</div>
+      ) : (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-800">未分配房间人员</h3>
+          <DataTable
+            rows={unassignedPeople}
+            rowKey={(row) => row.id}
+            emptyText="暂无未分配房间人员"
+            columns={[
+              { header: "ID", cell: (row) => row.id },
+              { header: "姓名", cell: (row) => `${row.chinese_name}/${row.english_name || "-"}` },
+              { header: "部门", cell: (row) => row.department },
+              { header: "性别", cell: (row) => row.gender },
+              { header: "人员类型", cell: (row) => row.person_type },
+            ]}
+          />
+        </div>
+      )}
+      {!loading ? (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-800">宿舍与可用房间</h3>
+          {dormAvailabilityGroups.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">暂无宿舍</div>
+          ) : (
+            dormAvailabilityGroups.map((group) => (
+              <section key={group.id} className="space-y-2">
+                <button
+                  type="button"
+                  className="flex w-full flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50"
+                  onClick={() => toggleDorm(group.id)}
+                >
+                  <span className="font-semibold text-slate-900">
+                    {group.dormName} (#{group.id})
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-700">
+                    {group.genderStatus}
+                    {renderDormMixChart(group)}
+                  </span>
+                  <span className="text-slate-600">在住人数：{group.activeOccupancy}</span>
+                  <span className="text-slate-600">空床位：{group.availableBeds}</span>
+                  <span className="ml-auto font-medium text-slate-700">
+                    {expandedDormIds.has(group.id) ? "收起房间" : "展开房间"}
+                  </span>
+                </button>
+                {expandedDormIds.has(group.id) ? (
+                  <DataTable
+                    rows={group.rooms}
+                    rowKey={(row) => row.id}
+                    emptyText="该宿舍暂无有空床位房间"
+                    columns={[
+                      { header: "房间", cell: (row) => `${row.roomName} (#${row.id})` },
+                      { header: "床位", cell: (row) => row.bedCount },
+                      { header: "在住", cell: (row) => row.activeOccupancy },
+                      { header: "空床位", cell: (row) => row.availableBeds },
+                      { header: "性别限制", cell: (row) => row.genderLimit },
+                      { header: "当前人员", cell: (row) => formatOccupants(row.occupants) },
+                    ]}
+                  />
+                ) : null}
+              </section>
+            ))
+          )}
+        </div>
+      ) : null}
       <form
         onSubmit={onSubmit}
         className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4"
       >
         <FormField label="人员" required>
         <select className={fieldControlClass} value={form.person_id} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} required disabled={Boolean(editingId)}>
-          {people.map((person) => (
+          {assignablePeople.length === 0 ? <option value="">暂无未分配房间人员</option> : null}
+          {assignablePeople.map((person) => (
             <option key={person.id} value={person.id}>
               {person.chinese_name}/{person.english_name || "-"} (#{person.id})
             </option>
@@ -216,7 +495,7 @@ export function AllocationPage() {
         <button
           className={`${primaryButtonClass} md:col-span-4`}
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !form.person_id || !form.room_id}
         >
           {submitting ? "提交中..." : editingId ? "保存入住记录" : "新增入住记录"}
         </button>
@@ -265,6 +544,7 @@ export function AllocationPage() {
                   : "-"}
               </div>
               <div>性别限制：{selectedRoom.gender_limit}</div>
+              <div>当前人员：{formatOccupants(selectedRoomOccupants)}</div>
             </div>
           ) : (
             <div className="text-sm text-slate-500">请选择可用房间</div>
@@ -276,9 +556,17 @@ export function AllocationPage() {
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
+        <div className="space-y-2">
+          <input
+            className={fieldControlClass}
+            value={allocationSearch}
+            onChange={(event) => setAllocationSearch(event.target.value)}
+            placeholder="搜索入住分配记录"
+          />
         <DataTable
-          rows={allocations}
+          rows={filteredAllocations}
           rowKey={(row) => row.id}
+          emptyText="没有匹配记录"
           columns={[
             { header: "ID", cell: (row) => row.id },
             { header: "人员", cell: (row) => `${personMap.get(row.person_id) ?? "Unknown"} (#${row.person_id})` },
@@ -335,6 +623,7 @@ export function AllocationPage() {
             },
           ]}
         />
+        </div>
       )}
     </section>
   );

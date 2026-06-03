@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
@@ -46,6 +46,7 @@ export function VehiclesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   const load = async () => {
     try {
@@ -123,7 +124,28 @@ export function VehiclesPage() {
     }
   };
 
-  const dormMap = new Map(dorms.map((dorm) => [dorm.id, dorm.name]));
+  const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return rows;
+    return rows.filter((row) =>
+      [
+        row.id,
+        row.plate_number,
+        row.vehicle_type,
+        row.seat_count,
+        row.base_dorm_id,
+        row.base_dorm_id ? dormMap.get(row.base_dorm_id) : null,
+        row.insurance_expire_date,
+        row.inspection_expire_date,
+        row.maintenance_due_date,
+        vehicleStatuses.find((item) => item.value === row.status)?.label ?? row.status,
+        row.note,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  }, [dormMap, rows, search]);
 
   return (
     <section className="space-y-4">
@@ -197,9 +219,17 @@ export function VehiclesPage() {
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
+        <div className="space-y-2">
+          <input
+            className={fieldControlClass}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索车辆记录"
+          />
         <DataTable
-          rows={rows}
+          rows={filteredRows}
           rowKey={(row) => row.id}
+          emptyText="没有匹配记录"
           columns={[
             { header: "ID", cell: (row) => row.id },
             { header: "车牌号", cell: (row) => row.plate_number },
@@ -228,6 +258,7 @@ export function VehiclesPage() {
             },
           ]}
         />
+        </div>
       )}
     </section>
   );

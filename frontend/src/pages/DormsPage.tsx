@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
 import { DataTable } from "../components/DataTable";
@@ -32,6 +32,7 @@ export function DormsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState<DormFormState>(emptyForm);
 
   const load = async () => {
@@ -98,6 +99,16 @@ export function DormsPage() {
     }
   };
 
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return rows;
+    return rows.filter((row) =>
+      [row.id, row.name, row.type, row.address, row.lease_start_date, row.lease_end_date, row.status]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  }, [rows, search]);
+
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">宿舍管理</h2>
@@ -153,9 +164,17 @@ export function DormsPage() {
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
+        <div className="space-y-2">
+          <input
+            className={fieldControlClass}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索宿舍记录"
+          />
         <DataTable
-          rows={rows}
+          rows={filteredRows}
           rowKey={(row) => row.id}
+          emptyText="没有匹配记录"
           columns={[
             { header: "ID", cell: (row) => row.id },
             { header: "名称", cell: (row) => row.name },
@@ -181,6 +200,7 @@ export function DormsPage() {
             },
           ]}
         />
+        </div>
       )}
     </section>
   );

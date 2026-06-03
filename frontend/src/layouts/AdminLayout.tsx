@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { useLanguage } from "../i18n";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
@@ -17,6 +18,7 @@ const navItems = [
 
 export function AdminLayout() {
   const { user, isAdmin, logout } = useAuth();
+  const { language, toggleLanguage } = useLanguage();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -45,6 +47,13 @@ export function AdminLayout() {
               </NavLink>
             ))}
             <span className="ml-2 text-sm text-slate-600">{user?.display_name || user?.username}</span>
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              {language === "zh" ? "English" : "中文"}
+            </button>
             <button
               type="button"
               onClick={handleLogout}

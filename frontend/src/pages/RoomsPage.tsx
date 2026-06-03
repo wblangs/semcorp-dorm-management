@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
@@ -33,6 +33,7 @@ export function RoomsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState<RoomFormState>(emptyForm);
 
   const load = async () => {
@@ -104,7 +105,25 @@ export function RoomsPage() {
     }
   };
 
-  const dormMap = new Map(dorms.map((dorm) => [dorm.id, dorm.name]));
+  const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return rows;
+    return rows.filter((row) =>
+      [
+        row.id,
+        dormMap.get(row.dorm_id),
+        row.dorm_id,
+        row.room_name,
+        row.room_type,
+        row.bed_count,
+        row.gender_limit,
+        row.status,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  }, [dormMap, rows, search]);
 
   return (
     <section className="space-y-4">
@@ -172,9 +191,17 @@ export function RoomsPage() {
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
+        <div className="space-y-2">
+          <input
+            className={fieldControlClass}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索房间记录"
+          />
         <DataTable
-          rows={rows}
+          rows={filteredRows}
           rowKey={(row) => row.id}
+          emptyText="没有匹配记录"
           columns={[
             { header: "ID", cell: (row) => row.id },
             { header: "宿舍", cell: (row) => `${dormMap.get(row.dorm_id) ?? "Unknown"} (#${row.dorm_id})` },
@@ -200,6 +227,7 @@ export function RoomsPage() {
             },
           ]}
         />
+        </div>
       )}
     </section>
   );
