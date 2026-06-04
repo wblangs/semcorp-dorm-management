@@ -37,6 +37,8 @@ type DormAvailabilityGroup = DormGenderRow & {
   rooms: RoomAvailabilityRow[];
 };
 
+const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
+
 export function AllocationPage() {
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -79,7 +81,10 @@ export function AllocationPage() {
       setRooms(r);
       setForm((f) => ({
         ...f,
-        dorm_id: f.dorm_id || String(d[0]?.id ?? ""),
+        dorm_id:
+          f.dorm_id && d.some((dorm) => String(dorm.id) === f.dorm_id && isActiveStatus(dorm.status))
+            ? f.dorm_id
+            : String(d.find((dorm) => isActiveStatus(dorm.status))?.id ?? ""),
       }));
     } catch (err) {
       setError((err as Error).message);
@@ -126,6 +131,12 @@ export function AllocationPage() {
   );
   const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
   const roomMap = useMemo(() => new Map(rooms.map((room) => [room.id, room.room_name])), [rooms]);
+  const activeDorms = useMemo(() => dorms.filter((dorm) => isActiveStatus(dorm.status)), [dorms]);
+  const activeDormIds = useMemo(() => new Set(activeDorms.map((dorm) => dorm.id)), [activeDorms]);
+  const activeRooms = useMemo(
+    () => rooms.filter((room) => activeDormIds.has(room.dorm_id) && isActiveStatus(room.status)),
+    [activeDormIds, rooms],
+  );
 
   const selectedPerson = useMemo(
     () => people.find((person) => String(person.id) === form.person_id) ?? null,
@@ -155,10 +166,23 @@ export function AllocationPage() {
     return [currentPerson, ...unassignedPeople];
   }, [editingId, form.person_id, people, unassignedPeople]);
 
+  const dormOptions = useMemo(() => {
+    if (!editingId) return activeDorms;
+    const currentDorm = dorms.find((dorm) => String(dorm.id) === form.dorm_id);
+    if (!currentDorm || activeDorms.some((dorm) => dorm.id === currentDorm.id)) {
+      return activeDorms;
+    }
+    return [currentDorm, ...activeDorms];
+  }, [activeDorms, dorms, editingId, form.dorm_id]);
+
   const roomOptions = useMemo(() => {
     if (!editingId) return availableRooms;
-    return rooms.filter((room) => String(room.dorm_id) === form.dorm_id);
-  }, [availableRooms, editingId, form.dorm_id, rooms]);
+    return rooms.filter(
+      (room) =>
+        String(room.dorm_id) === form.dorm_id &&
+        (isActiveStatus(room.status) || String(room.id) === form.room_id),
+    );
+  }, [availableRooms, editingId, form.dorm_id, form.room_id, rooms]);
 
   const selectedRoom = useMemo(
     () => roomOptions.find((room) => String(room.id) === form.room_id) ?? null,
@@ -196,7 +220,7 @@ export function AllocationPage() {
 
   const roomAvailabilityRows = useMemo<RoomAvailabilityRow[]>(
     () =>
-      rooms
+      activeRooms
         .map((room) => {
           const occupants = roomOccupantsByRoomId.get(room.id) ?? [];
           return {
@@ -212,13 +236,13 @@ export function AllocationPage() {
           };
         })
         .filter((room) => room.availableBeds > 0),
-    [dormMap, roomOccupantsByRoomId, rooms],
+    [activeRooms, dormMap, roomOccupantsByRoomId],
   );
 
   const dormGenderRows = useMemo<DormGenderRow[]>(
     () =>
-      dorms.map((dorm) => {
-        const dormRooms = rooms.filter((room) => room.dorm_id === dorm.id);
+      activeDorms.map((dorm) => {
+        const dormRooms = activeRooms.filter((room) => room.dorm_id === dorm.id);
         const occupants = dormRooms.flatMap((room) => roomOccupantsByRoomId.get(room.id) ?? []);
 
         const genders = new Set(occupants.map((occupant) => occupant.gender));
@@ -250,7 +274,7 @@ export function AllocationPage() {
           availableBeds,
         };
       }),
-    [dorms, roomOccupantsByRoomId, rooms],
+    [activeDorms, activeRooms, roomOccupantsByRoomId],
   );
 
   const dormAvailabilityGroups = useMemo<DormAvailabilityGroup[]>(
@@ -544,9 +568,12 @@ export function AllocationPage() {
             onChange={(e) => setForm((f) => ({ ...f, dorm_id: e.target.value }))}
             required
           >
-            {dorms.map((dorm) => (
+            {dormOptions.length === 0 ? <option value="">暂无 active 宿舍</option> : null}
+
+            {dormOptions.map((dorm) => (
               <option key={dorm.id} value={dorm.id}>
                 {dorm.name} (#{dorm.id})
+                {isActiveStatus(dorm.status) ? "" : " - inactive"}
               </option>
             ))}
           </select>
@@ -559,10 +586,13 @@ export function AllocationPage() {
             onChange={(e) => setForm((f) => ({ ...f, room_id: e.target.value }))}
             required
           >
+            {roomOptions.length === 0 ? <option value="">暂无可分配房间</option> : null}
+
             {roomOptions.map((room) => (
               <option key={room.id} value={room.id}>
                 {room.room_name} (#{room.id})
                 {"available_beds" in room ? ` - 可用床位:${room.available_beds}` : ""}
+                {isActiveStatus(room.status) ? "" : " - inactive"}
               </option>
             ))}
           </select>

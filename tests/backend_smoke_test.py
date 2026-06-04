@@ -16,11 +16,14 @@ from backend.auth import require_admin, verify_password
 from backend.models import AuditLog, Base, User
 from backend.schemas import (
     AllocationCreate,
+    AllocationUpdate,
     CheckoutRequest,
     DictionaryReplace,
     DormCreate,
+    DormUpdate,
     PersonCreate,
     RoomCreate,
+    RoomUpdate,
     UserCreate,
     UserUpdate,
     VehicleCreate,
@@ -80,8 +83,13 @@ class BackendSmokeTest(unittest.TestCase):
             management.delete_person(person.id, self.db)
         self.assertIn("active 入住记录", blocked.exception.detail)
 
-        checked_out = management.checkout_allocation(allocation.id, CheckoutRequest(), self.db)
+        checked_out = management.checkout_allocation(
+            allocation.id,
+            CheckoutRequest(check_out_date=date(2026, 5, 30)),
+            self.db,
+        )
         self.assertEqual(checked_out.status, "checked_out")
+        self.assertEqual(checked_out.check_out_date, date(2026, 5, 30))
 
         next_allocation = management.create_allocation(
             AllocationCreate(
@@ -93,6 +101,92 @@ class BackendSmokeTest(unittest.TestCase):
             self.db,
         )
         self.assertEqual(next_allocation.status, "active")
+
+    def test_inactive_dorm_or_room_cannot_be_allocated(self):
+        person = management.create_person(
+            PersonCreate(
+                chinese_name="李四",
+                english_name=None,
+                department="IT",
+                person_type="Employee",
+                gender="Male",
+            ),
+            self.db,
+        )
+        dorm = management.create_dorm(
+            DormCreate(name="Inactive Test", type="House", address="2 Test Road"),
+            self.db,
+        )
+        room = management.create_room(
+            RoomCreate(
+                dorm_id=dorm.id,
+                room_name="201",
+                room_type="Single",
+                bed_count=1,
+                gender_limit="Male",
+            ),
+            self.db,
+        )
+
+        management.update_room(room.id, RoomUpdate(status="inactive"), self.db)
+        self.assertEqual(management.list_available_rooms(dorm.id, person.id, self.db), [])
+        with self.assertRaises(HTTPException) as inactive_room:
+            management.create_allocation(
+                AllocationCreate(
+                    person_id=person.id,
+                    dorm_id=dorm.id,
+                    room_id=room.id,
+                    check_in_date=date(2026, 6, 2),
+                ),
+                self.db,
+            )
+        self.assertIn("房间不是 active 状态", inactive_room.exception.detail)
+
+        management.update_room(room.id, RoomUpdate(status="active"), self.db)
+        management.update_dorm(dorm.id, DormUpdate(status="inactive"), self.db)
+        self.assertEqual(management.list_available_rooms(dorm.id, person.id, self.db), [])
+        with self.assertRaises(HTTPException) as inactive_dorm:
+            management.create_allocation(
+                AllocationCreate(
+                    person_id=person.id,
+                    dorm_id=dorm.id,
+                    room_id=room.id,
+                    check_in_date=date(2026, 6, 2),
+                ),
+                self.db,
+            )
+        self.assertIn("宿舍不是 active 状态", inactive_dorm.exception.detail)
+
+        active_dorm = management.create_dorm(
+            DormCreate(name="Active Test", type="House", address="3 Test Road"),
+            self.db,
+        )
+        active_room = management.create_room(
+            RoomCreate(
+                dorm_id=active_dorm.id,
+                room_name="301",
+                room_type="Single",
+                bed_count=1,
+                gender_limit="Male",
+            ),
+            self.db,
+        )
+        allocation = management.create_allocation(
+            AllocationCreate(
+                person_id=person.id,
+                dorm_id=active_dorm.id,
+                room_id=active_room.id,
+                check_in_date=date(2026, 6, 2),
+            ),
+            self.db,
+        )
+        with self.assertRaises(HTTPException) as inactive_update:
+            management.update_allocation(
+                allocation.id,
+                AllocationUpdate(dorm_id=dorm.id, room_id=room.id),
+                self.db,
+            )
+        self.assertIn("宿舍不是 active 状态", inactive_update.exception.detail)
 
     def test_vehicle_crud_uses_soft_delete(self):
         dorm = management.create_dorm(

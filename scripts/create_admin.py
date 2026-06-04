@@ -12,6 +12,12 @@ from backend.database.session import engine, run_lightweight_migrations
 from backend.models import Base, User
 
 
+def configure_console_output() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="创建初始管理员账号")
     parser.add_argument("--username", required=True, help="管理员用户名")
@@ -21,6 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    configure_console_output()
     args = parse_args()
     username = normalize_username(args.username)
     if not args.password:

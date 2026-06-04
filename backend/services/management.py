@@ -309,6 +309,10 @@ def _active_room_count(room_id: int, db: Session, exclude_allocation_id: Optiona
     return db.scalar(stmt) or 0
 
 
+def _is_active_status(value: Optional[str]) -> bool:
+    return (value or "").strip().lower() == "active"
+
+
 def _validate_allocation_inputs(
     *,
     person: Optional[Person],
@@ -334,8 +338,10 @@ def _validate_allocation_inputs(
         raise HTTPException(status_code=400, detail="入住日期不能为空")
     if room.dorm_id != dorm.id:
         raise HTTPException(status_code=400, detail="所选房间不属于该宿舍")
-    if room.status.lower() == "disabled":
-        raise HTTPException(status_code=400, detail="房间已禁用，不能入住")
+    if not _is_active_status(dorm.status):
+        raise HTTPException(status_code=400, detail="宿舍不是 active 状态，不能入住")
+    if not _is_active_status(room.status):
+        raise HTTPException(status_code=400, detail="房间不是 active 状态，不能入住")
     if room.gender_limit != "Any" and room.gender_limit != person.gender:
         raise HTTPException(status_code=400, detail="人员性别与房间限制不匹配")
     room_active_count = _active_room_count(room.id, db, exclude_allocation_id=allocation_id_for_update)
@@ -698,9 +704,8 @@ def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Sessio
         raise HTTPException(status_code=404, detail="入住记录不存在")
     if allocation.status == "checked_out":
         raise HTTPException(status_code=400, detail="该入住记录已退宿")
-    _ = payload
     before = _model_data(allocation)
-    checkout_date = date.today()
+    checkout_date = payload.check_out_date or date.today()
     allocation.actual_check_out_date = checkout_date
     allocation.check_out_date = checkout_date
     allocation.status = "checked_out"
@@ -790,15 +795,18 @@ def list_available_rooms(dorm_id: int, person_id: int, db: Session):
     person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="人员不存在")
-    if not _get_active(db, Dorm, dorm_id):
+    dorm = _get_active(db, Dorm, dorm_id)
+    if not dorm:
         raise HTTPException(status_code=404, detail="宿舍不存在")
+    if not _is_active_status(dorm.status):
+        return []
 
     rooms = db.scalars(
         _active_stmt(Room).where(Room.dorm_id == dorm_id).order_by(Room.id.asc())
     ).all()
     result = []
     for room in rooms:
-        if room.status.lower() == "disabled":
+        if not _is_active_status(room.status):
             continue
         if room.gender_limit != "Any" and room.gender_limit != person.gender:
             continue
