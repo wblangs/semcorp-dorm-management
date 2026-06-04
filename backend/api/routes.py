@@ -244,6 +244,12 @@ def list_allocations(db: Session = Depends(get_db), current_user: User = Depends
     return management.list_allocations(db)
 
 
+@router.get("/allocations/backup")
+def list_allocation_backup_history(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    _ = current_user
+    return management.list_allocation_backup_history(db)
+
+
 @router.post("/allocations")
 def create_allocation(
     payload: AllocationCreate,
@@ -277,9 +283,27 @@ def checkout_allocation(
 def delete_allocation(
     allocation_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return management.hide_allocation_from_user_history(allocation_id, db, operator=current_user.username)
+
+
+@router.delete("/allocations/backup/{allocation_id}")
+def delete_allocation_backup(
+    allocation_id: int,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    return management.delete_allocation(allocation_id, db, operator=current_user.username)
+    return management.delete_allocation_backup(allocation_id, db, operator=current_user.username)
+
+
+@router.post("/allocations/backup/{allocation_id}/recover")
+def recover_allocation_user_history(
+    allocation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return management.recover_allocation_user_history(allocation_id, db, operator=current_user.username)
 
 
 @router.get("/rooms/available")

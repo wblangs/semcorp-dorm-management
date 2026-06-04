@@ -47,7 +47,14 @@ function AppRoutes() {
         <Route path="/people" element={<PeoplePage />} />
         <Route path="/stay" element={<StayPage />} />
         <Route path="/allocations" element={<AllocationPage />} />
-        <Route path="/check-in-records" element={<CheckInRecordsPage />} />
+        <Route
+          path="/check-in-records"
+          element={
+            <AdminOnly>
+              <CheckInRecordsPage />
+            </AdminOnly>
+          }
+        />
 
         <Route path="/vehicles" element={<VehiclesPage />} />
         <Route

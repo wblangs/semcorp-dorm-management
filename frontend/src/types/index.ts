@@ -49,6 +49,7 @@ export type Allocation = {
   note: string | null;
   check_out_date: string | null;
   status: "active" | "checked_out";
+  hidden_from_user_history: boolean;
 };
 
 export type AvailableRoom = {

@@ -83,6 +83,7 @@ export const api = {
   deletePerson: (id: number) => apiRequest<{ deleted: boolean }>(`/api/people/${id}`, { method: "DELETE" }),
 
   getAllocations: () => apiRequest<Allocation[]>("/api/allocations"),
+  getAllocationBackupHistory: () => apiRequest<Allocation[]>("/api/allocations/backup"),
   createAllocation: (payload: {
     person_id: number;
     dorm_id: number;
@@ -105,6 +106,10 @@ export const api = {
     apiRequest<Allocation>(`/api/allocations/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteAllocation: (id: number) =>
     apiRequest<{ deleted: boolean }>(`/api/allocations/${id}`, { method: "DELETE" }),
+  deleteAllocationBackup: (id: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/allocations/backup/${id}`, { method: "DELETE" }),
+  recoverAllocationUserHistory: (id: number) =>
+    apiRequest<Allocation>(`/api/allocations/backup/${id}/recover`, { method: "POST" }),
   checkoutAllocation: (id: number, check_out_date: string) =>
     apiRequest<Allocation>(`/api/allocations/${id}/checkout`, {
       method: "POST",

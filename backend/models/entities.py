@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampSoftDeleteMixin
@@ -90,6 +90,7 @@ class Allocation(TimestampSoftDeleteMixin, Base):
     note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     check_out_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     status: Mapped[Literal["active", "checked_out"]] = mapped_column(String(20), default="active")
+    hidden_from_user_history: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     person: Mapped["Person"] = relationship(back_populates="allocations")
     room: Mapped["Room"] = relationship(back_populates="allocations")

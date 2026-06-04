@@ -62,6 +62,8 @@ def run_lightweight_migrations() -> None:
                 safe_add_column(conn, "ALTER TABLE allocations ADD COLUMN actual_check_out_date DATE")
             if "note" not in allocation_columns:
                 safe_add_column(conn, "ALTER TABLE allocations ADD COLUMN note VARCHAR(500)")
+            if "hidden_from_user_history" not in allocation_columns:
+                safe_add_column(conn, "ALTER TABLE allocations ADD COLUMN hidden_from_user_history BOOLEAN DEFAULT 0 NOT NULL")
 
         stay_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='stays'")

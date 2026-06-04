@@ -595,6 +595,14 @@ def list_stay_risks(db: Session):
 
 
 def list_allocations(db: Session):
+    return db.scalars(
+        _active_stmt(Allocation)
+        .where(Allocation.hidden_from_user_history.is_(False))
+        .order_by(Allocation.id.desc())
+    ).all()
+
+
+def list_allocation_backup_history(db: Session):
     return db.scalars(_active_stmt(Allocation).order_by(Allocation.id.desc())).all()
 
 
@@ -711,14 +719,36 @@ def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Sessio
     return allocation
 
 
-def delete_allocation(allocation_id: int, db: Session, operator: str = "admin"):
+def hide_allocation_from_user_history(allocation_id: int, db: Session, operator: str = "admin"):
     allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
         raise HTTPException(status_code=404, detail="入住记录不存在")
     if allocation.status == "active":
         raise HTTPException(status_code=400, detail="active 入住记录不能直接删除，请先退房")
-    if allocation.status not in {"cancelled", "draft","checked_out"}:
-        raise HTTPException(status_code=400, detail="仅 cancelled 或 draft 或 checked_out入住记录允许删除")
+    if allocation.status != "checked_out":
+        raise HTTPException(status_code=400, detail="仅已退宿入住记录允许从用户历史中删除")
+    before = _model_data(allocation)
+    allocation.hidden_from_user_history = True
+    db.flush()
+    _audit(
+        db,
+        entity_type="allocation",
+        entity_id=allocation.id,
+        action="hide_from_user_history",
+        before_data=before,
+        after_data=_model_data(allocation),
+        operator=operator,
+    )
+    db.commit()
+    return {"deleted": True}
+
+
+def delete_allocation_backup(allocation_id: int, db: Session, operator: str = "admin"):
+    allocation = _get_active(db, Allocation, allocation_id)
+    if not allocation:
+        raise HTTPException(status_code=404, detail="入住备份记录不存在")
+    if allocation.status == "active":
+        raise HTTPException(status_code=400, detail="active 入住记录不能直接删除，请先退房")
     before = _model_data(allocation)
     allocation.is_deleted = True
     db.flush()
@@ -726,13 +756,34 @@ def delete_allocation(allocation_id: int, db: Session, operator: str = "admin"):
         db,
         entity_type="allocation",
         entity_id=allocation.id,
-        action="delete",
+        action="delete_backup",
         before_data=before,
         after_data=_model_data(allocation),
         operator=operator,
     )
     db.commit()
     return {"deleted": True}
+
+
+def recover_allocation_user_history(allocation_id: int, db: Session, operator: str = "admin"):
+    allocation = _get_active(db, Allocation, allocation_id)
+    if not allocation:
+        raise HTTPException(status_code=404, detail="入住备份记录不存在")
+    before = _model_data(allocation)
+    allocation.hidden_from_user_history = False
+    db.flush()
+    _audit(
+        db,
+        entity_type="allocation",
+        entity_id=allocation.id,
+        action="recover_user_history",
+        before_data=before,
+        after_data=_model_data(allocation),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(allocation)
+    return allocation
 
 
 def list_available_rooms(dorm_id: int, person_id: int, db: Session):

@@ -40,7 +40,7 @@ export function CheckInRecordsPage() {
       setLoading(true);
 
       const [a, p, d, r] = await Promise.all([
-        api.getAllocations(),
+        api.getAllocationBackupHistory(),
         api.getPeople(),
         api.getDorms(),
         api.getRooms(),
@@ -95,6 +95,7 @@ export function CheckInRecordsPage() {
         allocation.check_out_date,
         allocation.note,
         allocation.status === "active" ? "在住" : "已退宿",
+        allocation.hidden_from_user_history ? "用户已删除" : "用户可见",
         allocation.status,
       ]
         .filter((value) => value !== null && value !== undefined)
@@ -168,7 +169,7 @@ export function CheckInRecordsPage() {
     setError("");
 
     try {
-      await api.deleteAllocation(row.id);
+      await api.deleteAllocationBackup(row.id);
 
       if (editingId === row.id) {
         setEditingId(null);
@@ -180,9 +181,19 @@ export function CheckInRecordsPage() {
     }
   };
 
+  const onRecover = async (row: Allocation) => {
+    setError("");
+    try {
+      await api.recoverAllocationUserHistory(row.id);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   return (
     <section className="space-y-4">
-      <h2 className="text-xl font-semibold">入住记录</h2>
+      <h2 className="text-xl font-semibold">入住备份记录</h2>
 
       {editingId ? (
         <form
@@ -315,6 +326,10 @@ export function CheckInRecordsPage() {
                 cell: (row) => (row.status === "active" ? "在住" : "已退宿"),
               },
               {
+                header: "用户页面",
+                cell: (row) => (row.hidden_from_user_history ? "用户已删除" : "用户可见"),
+              },
+              {
                 header: "操作",
                 cell: (row) => (
                   <div className="flex gap-2">
@@ -330,9 +345,14 @@ export function CheckInRecordsPage() {
                       </button>
                     ) : null}
 
-                    {isAdmin ? (
+                    {isAdmin && row.status !== "active" ? (
                       <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
                         删除
+                      </button>
+                    ) : null}
+                    {isAdmin && row.hidden_from_user_history ? (
+                      <button className={editButtonClass} type="button" onClick={() => void onRecover(row)}>
+                        恢复
                       </button>
                     ) : null}
                   </div>

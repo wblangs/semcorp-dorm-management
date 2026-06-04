@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
 import { DataTable } from "../components/DataTable";
-import { fieldControlClass, FormField, primaryButtonClass } from "../components/FormField";
+import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import type { Allocation, AvailableRoom, Dorm, Person, Room } from "../types";
 
 type Occupant = {
@@ -46,7 +46,14 @@ export function AllocationPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [expandedDormIds, setExpandedDormIds] = useState<Set<number>>(new Set());
+  const [livingSearch, setLivingSearch] = useState("");
+  const [checkoutSearch, setCheckoutSearch] = useState("");
+  const [recordSectionsOpen, setRecordSectionsOpen] = useState({
+    living: true,
+    checkout: true,
+  });
 
   const [form, setForm] = useState({
     person_id: "",
@@ -94,6 +101,7 @@ export function AllocationPage() {
       setForm((f) => ({ ...f, room_id: "" }));
       return;
     }
+    if (editingId) return;
 
     api
       .getAvailableRooms(dormId, personId)
@@ -110,9 +118,14 @@ export function AllocationPage() {
         setError(err.message);
         setAvailableRooms([]);
       });
-  }, [form.person_id, form.dorm_id]);
+  }, [editingId, form.person_id, form.dorm_id]);
 
+  const personMap = useMemo(
+    () => new Map(people.map((person) => [person.id, `${person.chinese_name}/${person.english_name || "-"}`])),
+    [people],
+  );
   const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
+  const roomMap = useMemo(() => new Map(rooms.map((room) => [room.id, room.room_name])), [rooms]);
 
   const selectedPerson = useMemo(
     () => people.find((person) => String(person.id) === form.person_id) ?? null,
@@ -133,8 +146,19 @@ export function AllocationPage() {
     () => people.filter((person) => !activeAllocatedPersonIds.has(person.id)),
     [activeAllocatedPersonIds, people],
   );
+  const assignablePeople = useMemo(() => {
+    if (!editingId) return unassignedPeople;
+    const currentPerson = people.find((person) => String(person.id) === form.person_id);
+    if (!currentPerson || unassignedPeople.some((person) => person.id === currentPerson.id)) {
+      return unassignedPeople;
+    }
+    return [currentPerson, ...unassignedPeople];
+  }, [editingId, form.person_id, people, unassignedPeople]);
 
-  const roomOptions = availableRooms;
+  const roomOptions = useMemo(() => {
+    if (!editingId) return availableRooms;
+    return rooms.filter((room) => String(room.dorm_id) === form.dorm_id);
+  }, [availableRooms, editingId, form.dorm_id, rooms]);
 
   const selectedRoom = useMemo(
     () => roomOptions.find((room) => String(room.id) === form.room_id) ?? null,
@@ -242,8 +266,50 @@ export function AllocationPage() {
     () => (selectedRoom ? roomOccupantsByRoomId.get(selectedRoom.id) ?? [] : []),
     [roomOccupantsByRoomId, selectedRoom],
   );
+  const livingAllocations = useMemo(
+    () => allocations.filter((allocation) => allocation.status === "active"),
+    [allocations],
+  );
+  const checkedOutAllocations = useMemo(
+    () => allocations.filter((allocation) => allocation.status === "checked_out"),
+    [allocations],
+  );
+  const filterAllocationsByKeyword = (source: Allocation[], search: string) => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return source;
+    return source.filter((allocation) =>
+      [
+        allocation.id,
+        allocation.person_id,
+        personMap.get(allocation.person_id),
+        allocation.dorm_id,
+        dormMap.get(allocation.dorm_id),
+        allocation.room_id,
+        roomMap.get(allocation.room_id),
+        allocation.check_in_date,
+        allocation.expected_check_out_date,
+        allocation.actual_check_out_date,
+        allocation.check_out_date,
+        allocation.note,
+        "已退宿",
+        "在住",
+        allocation.status,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  };
+  const filteredLivingAllocations = useMemo(
+    () => filterAllocationsByKeyword(livingAllocations, livingSearch),
+    [dormMap, livingAllocations, livingSearch, personMap, roomMap],
+  );
+  const filteredCheckedOutAllocations = useMemo(
+    () => filterAllocationsByKeyword(checkedOutAllocations, checkoutSearch),
+    [checkedOutAllocations, checkoutSearch, dormMap, personMap, roomMap],
+  );
 
   useEffect(() => {
+    if (editingId) return;
     setForm((f) => {
       if (f.person_id && unassignedPeople.some((person) => String(person.id) === f.person_id)) {
         return f;
@@ -255,7 +321,7 @@ export function AllocationPage() {
         room_id: "",
       };
     });
-  }, [unassignedPeople]);
+  }, [editingId, unassignedPeople]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -263,14 +329,21 @@ export function AllocationPage() {
     setSubmitting(true);
 
     try {
-      await api.createAllocation({
-        person_id: Number(form.person_id),
+      const payload = {
         dorm_id: Number(form.dorm_id),
         room_id: Number(form.room_id),
         check_in_date: form.check_in_date,
         expected_check_out_date: form.expected_check_out_date || null,
         note: form.note.trim() || null,
-      });
+      };
+      if (editingId) {
+        await api.updateAllocation(editingId, payload);
+      } else {
+        await api.createAllocation({
+          ...payload,
+          person_id: Number(form.person_id),
+        });
+      }
 
       setForm((f) => ({
         ...f,
@@ -278,12 +351,47 @@ export function AllocationPage() {
         expected_check_out_date: "",
         note: "",
       }));
+      setEditingId(null);
 
       await load();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onDeletePrevious = async (row: Allocation) => {
+    if (!confirm(`确认从分配页面删除历史记录 #${row.id}？管理员备份记录仍会保留。`)) return;
+    setError("");
+    try {
+      await api.deleteAllocation(row.id);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const onEdit = (row: Allocation) => {
+    if (row.status !== "active") return;
+    setEditingId(row.id);
+    setForm({
+      person_id: String(row.person_id),
+      dorm_id: String(row.dorm_id),
+      room_id: String(row.room_id),
+      check_in_date: row.check_in_date,
+      expected_check_out_date: row.expected_check_out_date ?? "",
+      note: row.note ?? "",
+    });
+  };
+
+  const onCheckout = async (row: Allocation) => {
+    setError("");
+    try {
+      await api.checkoutAllocation(row.id, new Date().toISOString().slice(0, 10));
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
     }
   };
 
@@ -302,6 +410,12 @@ export function AllocationPage() {
       }
       return next;
     });
+  };
+  const toggleRecordSection = (section: "living" | "checkout") => {
+    setRecordSectionsOpen((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
   };
 
   const renderDormMixChart = (group: DormAvailabilityGroup) => {
@@ -411,10 +525,11 @@ export function AllocationPage() {
             value={form.person_id}
             onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))}
             required
+            disabled={Boolean(editingId)}
           >
-            {unassignedPeople.length === 0 ? <option value="">暂无未分配房间人员</option> : null}
+            {assignablePeople.length === 0 ? <option value="">暂无未分配房间人员</option> : null}
 
-            {unassignedPeople.map((person) => (
+            {assignablePeople.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.chinese_name}/{person.english_name || "-"} (#{person.id})
               </option>
@@ -446,7 +561,8 @@ export function AllocationPage() {
           >
             {roomOptions.map((room) => (
               <option key={room.id} value={room.id}>
-                {room.room_name} (#{room.id}) - 可用床位:{room.available_beds}
+                {room.room_name} (#{room.id})
+                {"available_beds" in room ? ` - 可用床位:${room.available_beds}` : ""}
               </option>
             ))}
           </select>
@@ -484,8 +600,26 @@ export function AllocationPage() {
           type="submit"
           disabled={submitting || !form.person_id || !form.room_id}
         >
-          {submitting ? "提交中..." : "新增入住记录"}
+          {submitting ? "提交中..." : editingId ? "保存入住记录" : "新增入住记录"}
         </button>
+        {editingId ? (
+          <button
+            className={`${secondaryButtonClass} md:col-span-4`}
+            type="button"
+            onClick={() => {
+              setEditingId(null);
+              setForm((f) => ({
+                ...f,
+                person_id: String(unassignedPeople[0]?.id ?? ""),
+                room_id: "",
+                expected_check_out_date: "",
+                note: "",
+              }));
+            }}
+          >
+            取消编辑
+          </button>
+        ) : null}
       </form>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -512,7 +646,12 @@ export function AllocationPage() {
           {selectedRoom ? (
             <div className="space-y-1 text-sm text-slate-700">
               <div>床位数：{selectedRoom.bed_count}</div>
-              <div>当前入住人数：{selectedRoom.active_occupancy}</div>
+              <div>
+                当前入住人数：
+                {"active_occupancy" in selectedRoom
+                  ? (selectedRoom as AvailableRoom).active_occupancy
+                  : (roomOccupantsByRoomId.get(selectedRoom.id)?.length ?? 0)}
+              </div>
               <div>性别限制：{selectedRoom.gender_limit}</div>
               <div>当前人员：{formatOccupants(selectedRoomOccupants)}</div>
             </div>
@@ -521,6 +660,110 @@ export function AllocationPage() {
           )}
         </div>
       </div>
+
+      {!loading ? (
+        <div className="space-y-3">
+          <section className="space-y-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50"
+              onClick={() => toggleRecordSection("living")}
+            >
+              <span className="font-semibold text-slate-900">当前在住记录</span>
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{livingAllocations.length}</span>
+              <span className="ml-auto font-medium text-slate-700">
+                {recordSectionsOpen.living ? "收起记录" : "展开记录"}
+              </span>
+            </button>
+            {recordSectionsOpen.living ? (
+              <div className="space-y-2">
+                <input
+                  className={fieldControlClass}
+                  value={livingSearch}
+                  onChange={(event) => setLivingSearch(event.target.value)}
+                  placeholder="搜索当前在住记录"
+                />
+                <DataTable
+                  rows={filteredLivingAllocations}
+                  rowKey={(row) => row.id}
+                  emptyText="没有匹配记录"
+                  columns={[
+                    { header: "ID", cell: (row) => row.id },
+                    { header: "人员", cell: (row) => `${personMap.get(row.person_id) ?? "Unknown"} (#${row.person_id})` },
+                    { header: "宿舍", cell: (row) => `${dormMap.get(row.dorm_id) ?? "Unknown"} (#${row.dorm_id})` },
+                    { header: "房间", cell: (row) => `${roomMap.get(row.room_id) ?? "Unknown"} (#${row.room_id})` },
+                    { header: "入住日期", cell: (row) => row.check_in_date },
+                    { header: "预计退宿日期", cell: (row) => row.expected_check_out_date ?? "-" },
+                    { header: "备注", cell: (row) => row.note ?? "-" },
+                    { header: "状态", cell: () => "在住" },
+                    {
+                      header: "操作",
+                      cell: (row) => (
+                        <div className="flex gap-2">
+                          <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
+                            修改
+                          </button>
+                          <button className={editButtonClass} type="button" onClick={() => void onCheckout(row)}>
+                            退房
+                          </button>
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            ) : null}
+          </section>
+
+          <section className="space-y-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50"
+              onClick={() => toggleRecordSection("checkout")}
+            >
+              <span className="font-semibold text-slate-900">已退宿记录</span>
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{checkedOutAllocations.length}</span>
+              <span className="ml-auto font-medium text-slate-700">
+                {recordSectionsOpen.checkout ? "收起记录" : "展开记录"}
+              </span>
+            </button>
+            {recordSectionsOpen.checkout ? (
+              <div className="space-y-2">
+                <input
+                  className={fieldControlClass}
+                  value={checkoutSearch}
+                  onChange={(event) => setCheckoutSearch(event.target.value)}
+                  placeholder="搜索已退宿记录"
+                />
+                <DataTable
+                  rows={filteredCheckedOutAllocations}
+                  rowKey={(row) => row.id}
+                  emptyText="没有匹配记录"
+                  columns={[
+                    { header: "ID", cell: (row) => row.id },
+                    { header: "人员", cell: (row) => `${personMap.get(row.person_id) ?? "Unknown"} (#${row.person_id})` },
+                    { header: "宿舍", cell: (row) => `${dormMap.get(row.dorm_id) ?? "Unknown"} (#${row.dorm_id})` },
+                    { header: "房间", cell: (row) => `${roomMap.get(row.room_id) ?? "Unknown"} (#${row.room_id})` },
+                    { header: "入住日期", cell: (row) => row.check_in_date },
+                    { header: "预计退宿日期", cell: (row) => row.expected_check_out_date ?? "-" },
+                    { header: "实际退宿日期", cell: (row) => row.actual_check_out_date ?? row.check_out_date ?? "-" },
+                    { header: "备注", cell: (row) => row.note ?? "-" },
+                    { header: "状态", cell: () => "已退宿" },
+                    {
+                      header: "操作",
+                      cell: (row) => (
+                        <button className={deleteButtonClass} type="button" onClick={() => void onDeletePrevious(row)}>
+                          删除
+                        </button>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
     </section>
