@@ -172,7 +172,7 @@ export function VehiclesPage() {
           <option value="">选择常驻宿舍</option>
           {dorms.map((dorm) => (
             <option key={dorm.id} value={dorm.id}>
-              {dorm.name} (#{dorm.id})
+              {dorm.name}
             </option>
           ))}
         </select>
@@ -231,11 +231,10 @@ export function VehiclesPage() {
           rowKey={(row) => row.id}
           emptyText="没有匹配记录"
           columns={[
-            { header: "ID", cell: (row) => row.id },
             { header: "车牌号", cell: (row) => row.plate_number },
             { header: "类型", cell: (row) => row.vehicle_type ?? "-" },
             { header: "座位", cell: (row) => row.seat_count },
-            { header: "常驻宿舍", cell: (row) => (row.base_dorm_id ? `${dormMap.get(row.base_dorm_id) ?? "Unknown"} (#${row.base_dorm_id})` : "-") },
+            { header: "常驻宿舍", cell: (row) => (row.base_dorm_id ? dormMap.get(row.base_dorm_id) ?? "Unknown" : "-") },
             { header: "保险到期", cell: (row) => row.insurance_expire_date ?? "-" },
             { header: "年检到期", cell: (row) => row.inspection_expire_date ?? "-" },
             { header: "保养到期", cell: (row) => row.maintenance_due_date ?? "-" },
