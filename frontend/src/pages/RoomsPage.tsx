@@ -134,7 +134,7 @@ export function RoomsPage() {
           <option value="">选择宿舍</option>
           {dorms.map((dorm) => (
             <option key={dorm.id} value={dorm.id}>
-              {dorm.name} (#{dorm.id})
+              {dorm.name}
             </option>
           ))}
         </select>
@@ -203,8 +203,7 @@ export function RoomsPage() {
           rowKey={(row) => row.id}
           emptyText="没有匹配记录"
           columns={[
-            { header: "ID", cell: (row) => row.id },
-            { header: "宿舍", cell: (row) => `${dormMap.get(row.dorm_id) ?? "Unknown"} (#${row.dorm_id})` },
+            { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
             { header: "房间名", cell: (row) => row.room_name },
             { header: "类型", cell: (row) => row.room_type },
             { header: "床位", cell: (row) => row.bed_count },

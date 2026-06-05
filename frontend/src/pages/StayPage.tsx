@@ -192,7 +192,7 @@ export function StayPage() {
         >
           {rows.map((row) => (
             <option key={row.person_id} value={row.person_id}>
-              {row.person.chinese_name}/{row.person.english_name || "-"} (#{row.person_id})
+              {row.person.chinese_name}/{row.person.english_name || "-"}
             </option>
           ))}
         </select>

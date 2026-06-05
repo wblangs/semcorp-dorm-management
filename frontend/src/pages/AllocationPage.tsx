@@ -386,7 +386,7 @@ export function AllocationPage() {
   };
 
   const onDeletePrevious = async (row: Allocation) => {
-    if (!confirm(`确认从分配页面删除历史记录 #${row.id}？管理员备份记录仍会保留。`)) return;
+    if (!confirm("确认从分配页面删除该历史记录？管理员备份记录仍会保留。")) return;
     setError("");
     try {
       await api.deleteAllocation(row.id);
@@ -421,7 +421,7 @@ export function AllocationPage() {
 
   const formatOccupants = (occupants: Occupant[]) =>
     occupants.length
-      ? occupants.map((occupant) => `${occupant.name} (${occupant.gender}, #${occupant.id})`).join("; ")
+      ? occupants.map((occupant) => `${occupant.name} (${occupant.gender})`).join("; ")
       : "Empty";
 
   const toggleDorm = (dormId: number) => {
@@ -477,7 +477,6 @@ export function AllocationPage() {
             rowKey={(row) => row.id}
             emptyText="暂无未分配房间人员"
             columns={[
-              { header: "ID", cell: (row) => row.id },
               { header: "姓名", cell: (row) => `${row.chinese_name}/${row.english_name || "-"}` },
               { header: "部门", cell: (row) => row.department },
               { header: "性别", cell: (row) => row.gender },
@@ -502,7 +501,7 @@ export function AllocationPage() {
                   onClick={() => toggleDorm(group.id)}
                 >
                   <span className="font-semibold text-slate-900">
-                    {group.dormName} (#{group.id})
+                    {group.dormName}
                   </span>
 
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-700">
@@ -524,7 +523,7 @@ export function AllocationPage() {
                     rowKey={(row) => row.id}
                     emptyText="该宿舍暂无有空床位房间"
                     columns={[
-                      { header: "房间", cell: (row) => `${row.roomName} (#${row.id})` },
+                      { header: "房间", cell: (row) => row.roomName },
                       { header: "床位", cell: (row) => row.bedCount },
                       { header: "在住", cell: (row) => row.activeOccupancy },
                       { header: "空床位", cell: (row) => row.availableBeds },
@@ -555,7 +554,7 @@ export function AllocationPage() {
 
             {assignablePeople.map((person) => (
               <option key={person.id} value={person.id}>
-                {person.chinese_name}/{person.english_name || "-"} (#{person.id})
+                {person.chinese_name}/{person.english_name || "-"}
               </option>
             ))}
           </select>
@@ -572,7 +571,7 @@ export function AllocationPage() {
 
             {dormOptions.map((dorm) => (
               <option key={dorm.id} value={dorm.id}>
-                {dorm.name} (#{dorm.id})
+                {dorm.name}
                 {isActiveStatus(dorm.status) ? "" : " - inactive"}
               </option>
             ))}
@@ -590,7 +589,7 @@ export function AllocationPage() {
 
             {roomOptions.map((room) => (
               <option key={room.id} value={room.id}>
-                {room.room_name} (#{room.id})
+                {room.room_name}
                 {"available_beds" in room ? ` - 可用床位:${room.available_beds}` : ""}
                 {isActiveStatus(room.status) ? "" : " - inactive"}
               </option>
@@ -718,10 +717,9 @@ export function AllocationPage() {
                   rowKey={(row) => row.id}
                   emptyText="没有匹配记录"
                   columns={[
-                    { header: "ID", cell: (row) => row.id },
-                    { header: "人员", cell: (row) => `${personMap.get(row.person_id) ?? "Unknown"} (#${row.person_id})` },
-                    { header: "宿舍", cell: (row) => `${dormMap.get(row.dorm_id) ?? "Unknown"} (#${row.dorm_id})` },
-                    { header: "房间", cell: (row) => `${roomMap.get(row.room_id) ?? "Unknown"} (#${row.room_id})` },
+                    { header: "人员", cell: (row) => personMap.get(row.person_id) ?? "Unknown" },
+                    { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
+                    { header: "房间", cell: (row) => roomMap.get(row.room_id) ?? "Unknown" },
                     { header: "入住日期", cell: (row) => row.check_in_date },
                     { header: "预计退宿日期", cell: (row) => row.expected_check_out_date ?? "-" },
                     { header: "备注", cell: (row) => row.note ?? "-" },
@@ -770,10 +768,9 @@ export function AllocationPage() {
                   rowKey={(row) => row.id}
                   emptyText="没有匹配记录"
                   columns={[
-                    { header: "ID", cell: (row) => row.id },
-                    { header: "人员", cell: (row) => `${personMap.get(row.person_id) ?? "Unknown"} (#${row.person_id})` },
-                    { header: "宿舍", cell: (row) => `${dormMap.get(row.dorm_id) ?? "Unknown"} (#${row.dorm_id})` },
-                    { header: "房间", cell: (row) => `${roomMap.get(row.room_id) ?? "Unknown"} (#${row.room_id})` },
+                    { header: "人员", cell: (row) => personMap.get(row.person_id) ?? "Unknown" },
+                    { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
+                    { header: "房间", cell: (row) => roomMap.get(row.room_id) ?? "Unknown" },
                     { header: "入住日期", cell: (row) => row.check_in_date },
                     { header: "预计退宿日期", cell: (row) => row.expected_check_out_date ?? "-" },
                     { header: "实际退宿日期", cell: (row) => row.actual_check_out_date ?? row.check_out_date ?? "-" },

@@ -176,7 +176,6 @@ export function DormsPage() {
           rowKey={(row) => row.id}
           emptyText="没有匹配记录"
           columns={[
-            { header: "ID", cell: (row) => row.id },
             { header: "名称", cell: (row) => row.name },
             { header: "类型", cell: (row) => row.type },
             { header: "地址", cell: (row) => row.address },

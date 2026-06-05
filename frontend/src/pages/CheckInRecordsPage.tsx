@@ -164,7 +164,7 @@ export function CheckInRecordsPage() {
   };
 
   const onDelete = async (row: Allocation) => {
-    if (!confirm(`确认删除入住记录 #${row.id}？`)) return;
+    if (!confirm("确认删除该入住记录？")) return;
 
     setError("");
 
@@ -203,7 +203,7 @@ export function CheckInRecordsPage() {
           <FormField label="人员">
             <input
               className={fieldControlClass}
-              value={`${personMap.get(Number(form.person_id)) ?? "Unknown"} (#${form.person_id})`}
+              value={personMap.get(Number(form.person_id)) ?? "Unknown"}
               disabled
             />
           </FormField>
@@ -223,7 +223,7 @@ export function CheckInRecordsPage() {
             >
               {dorms.map((dorm) => (
                 <option key={dorm.id} value={dorm.id}>
-                  {dorm.name} (#{dorm.id})
+                  {dorm.name}
                 </option>
               ))}
             </select>
@@ -238,7 +238,7 @@ export function CheckInRecordsPage() {
             >
               {roomOptions.map((room) => (
                 <option key={room.id} value={room.id}>
-                  {room.room_name} (#{room.id})
+                  {room.room_name}
                 </option>
               ))}
             </select>
@@ -313,10 +313,9 @@ export function CheckInRecordsPage() {
             rowKey={(row) => row.id}
             emptyText="没有匹配记录"
             columns={[
-              { header: "ID", cell: (row) => row.id },
-              { header: "人员", cell: (row) => `${personMap.get(row.person_id) ?? "Unknown"} (#${row.person_id})` },
-              { header: "宿舍", cell: (row) => `${dormMap.get(row.dorm_id) ?? "Unknown"} (#${row.dorm_id})` },
-              { header: "房间", cell: (row) => `${roomMap.get(row.room_id) ?? "Unknown"} (#${row.room_id})` },
+              { header: "人员", cell: (row) => personMap.get(row.person_id) ?? "Unknown" },
+              { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
+              { header: "房间", cell: (row) => roomMap.get(row.room_id) ?? "Unknown" },
               { header: "入住日期", cell: (row) => row.check_in_date },
               { header: "预计退宿日期", cell: (row) => row.expected_check_out_date ?? "-" },
               { header: "实际退宿日期", cell: (row) => row.actual_check_out_date ?? row.check_out_date ?? "-" },
