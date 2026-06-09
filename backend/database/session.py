@@ -48,6 +48,23 @@ def run_lightweight_migrations() -> None:
                 if "is_deleted" not in columns:
                     safe_add_column(conn, f"ALTER TABLE {table_name} ADD COLUMN is_deleted BOOLEAN DEFAULT 0 NOT NULL")
 
+        room_table_exists = conn.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table' AND name='rooms'")
+        ).fetchone()
+        if room_table_exists:
+            room_columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(rooms)")).fetchall()
+            }
+            if "bed_size" not in room_columns:
+                safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN bed_size VARCHAR(20)")
+            if "light_type" not in room_columns:
+                safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN light_type VARCHAR(20)")
+            if "nightstand_count" not in room_columns:
+                safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN nightstand_count INTEGER DEFAULT 0 NOT NULL")
+            if "trash_can_count" not in room_columns:
+                safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN trash_can_count INTEGER DEFAULT 0 NOT NULL")
+
         allocation_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='allocations'")
         ).fetchone()

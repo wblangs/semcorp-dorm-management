@@ -19,6 +19,8 @@ export function DictionariesPage() {
   const [drafts, setDrafts] = useState<Record<DictionaryKey, DictionaryOption>>({
     dormTypes: emptyOption,
     roomTypes: emptyOption,
+    bedSizes: emptyOption,
+    lightTypes: emptyOption,
     personTypes: emptyOption,
     departments: emptyOption,
     visaTypes: emptyOption,

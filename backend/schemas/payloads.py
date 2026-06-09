@@ -29,6 +29,10 @@ class RoomCreate(BaseModel):
     bed_count: int = Field(gt=0)
     gender_limit: Literal["Male", "Female", "Any"] = "Any"
     status: str = "active"
+    bed_size: Optional[str] = None
+    light_type: Optional[str] = None
+    nightstand_count: int = Field(default=0, ge=0)
+    trash_can_count: int = Field(default=0, ge=0)
 
 
 class RoomUpdate(BaseModel):
@@ -38,6 +42,10 @@ class RoomUpdate(BaseModel):
     bed_count: Optional[int] = Field(default=None, gt=0)
     gender_limit: Optional[Literal["Male", "Female", "Any"]] = None
     status: Optional[str] = None
+    bed_size: Optional[str] = None
+    light_type: Optional[str] = None
+    nightstand_count: Optional[int] = Field(default=None, ge=0)
+    trash_can_count: Optional[int] = Field(default=None, ge=0)
 
 
 class PersonCreate(BaseModel):

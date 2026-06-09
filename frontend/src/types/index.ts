@@ -27,6 +27,10 @@ export type Room = {
   bed_count: number;
   gender_limit: "Male" | "Female" | "Any";
   status: string;
+  bed_size: string | null;
+  light_type: string | null;
+  nightstand_count: number;
+  trash_can_count: number;
 };
 
 export type Person = {

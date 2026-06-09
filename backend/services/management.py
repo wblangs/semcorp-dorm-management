@@ -37,6 +37,14 @@ DEFAULT_DICTIONARIES = {
         "label": "房间类型",
         "items": [("Single", "Single"), ("Double", "Double"), ("Suite", "Suite")],
     },
+    "bedSizes": {
+        "label": "床型",
+        "items": [("Twin", "Twin"), ("Full", "Full"), ("Queen", "Queen"), ("King", "King")],
+    },
+    "lightTypes": {
+        "label": "灯具类型",
+        "items": [("落地灯", "落地灯"), ("顶灯", "顶灯")],
+    },
     "personTypes": {
         "label": "人员类型",
         "items": [("Employee", "Employee"), ("Contractor", "Contractor"), ("Visitor", "Visitor")],

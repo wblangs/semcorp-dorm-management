@@ -43,6 +43,14 @@ class Room(TimestampSoftDeleteMixin, Base):
     bed_count: Mapped[int] = mapped_column(Integer, nullable=False)
     gender_limit: Mapped[Literal["Male", "Female", "Any"]] = mapped_column(String(10), default="Any")
     status: Mapped[str] = mapped_column(String(20), default="active")
+    # 床 bed size: Twin / Full / Queen / King
+    bed_size: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # 灯 light type: 落地灯 / 顶灯
+    light_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # 床头柜 nightstand count
+    nightstand_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # 垃圾桶 trash can count
+    trash_can_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     dorm: Mapped["Dorm"] = relationship(back_populates="rooms")
     allocations: Mapped[list["Allocation"]] = relationship(back_populates="room")
