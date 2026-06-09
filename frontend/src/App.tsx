@@ -11,6 +11,7 @@ import { DormsPage } from "./pages/DormsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { RoomsPage } from "./pages/RoomsPage";
+import { RoomAssetsPage } from "./pages/RoomAssetsPage";
 import { StayPage } from "./pages/StayPage";
 import { SystemPage } from "./pages/SystemPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/dorms" element={<DormsPage />} />
         <Route path="/rooms" element={<RoomsPage />} />
+        <Route path="/room-assets" element={<RoomAssetsPage />} />
         <Route path="/people" element={<PeoplePage />} />
         <Route path="/stay" element={<StayPage />} />
         <Route path="/allocations" element={<AllocationPage />} />

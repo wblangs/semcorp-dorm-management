@@ -14,10 +14,6 @@ type RoomFormState = {
   bed_count: number;
   gender_limit: "Any" | "Male" | "Female";
   status: string;
-  bed_size: string;
-  light_type: string;
-  nightstand_count: number;
-  trash_can_count: number;
 };
 
 const emptyForm: RoomFormState = {
@@ -27,10 +23,6 @@ const emptyForm: RoomFormState = {
   bed_count: 1,
   gender_limit: "Any",
   status: "active",
-  bed_size: "",
-  light_type: "",
-  nightstand_count: 0,
-  trash_can_count: 0,
 };
 
 export function RoomsPage() {
@@ -72,8 +64,6 @@ export function RoomsPage() {
       const payload = {
         ...form,
         dorm_id: Number(form.dorm_id),
-        bed_size: form.bed_size || null,
-        light_type: form.light_type || null,
       };
       if (editingId) {
         await api.updateRoom(editingId, payload);
@@ -97,10 +87,6 @@ export function RoomsPage() {
       bed_count: row.bed_count,
       gender_limit: row.gender_limit,
       status: row.status,
-      bed_size: row.bed_size ?? "",
-      light_type: row.light_type ?? "",
-      nightstand_count: row.nightstand_count ?? 0,
-      trash_can_count: row.trash_can_count ?? 0,
     });
   };
 
@@ -131,10 +117,6 @@ export function RoomsPage() {
         row.room_name,
         row.room_type,
         row.bed_count,
-        row.bed_size,
-        row.light_type,
-        row.nightstand_count,
-        row.trash_can_count,
         row.gender_limit,
         row.status,
       ]
@@ -188,32 +170,6 @@ export function RoomsPage() {
           ))}
         </select>
         </FormField>
-        <FormField label="床型">
-        <select className={fieldControlClass} value={form.bed_size} onChange={(e) => setForm((f) => ({ ...f, bed_size: e.target.value }))}>
-          <option value="">未设置</option>
-          {dictionaries.bedSizes.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        </FormField>
-        <FormField label="灯具类型">
-        <select className={fieldControlClass} value={form.light_type} onChange={(e) => setForm((f) => ({ ...f, light_type: e.target.value }))}>
-          <option value="">未设置</option>
-          {dictionaries.lightTypes.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        </FormField>
-        <FormField label="床头柜数量">
-          <input className={fieldControlClass} type="number" min={0} value={form.nightstand_count} onChange={(e) => setForm((f) => ({ ...f, nightstand_count: Number(e.target.value) }))} />
-        </FormField>
-        <FormField label="垃圾桶数量">
-          <input className={fieldControlClass} type="number" min={0} value={form.trash_can_count} onChange={(e) => setForm((f) => ({ ...f, trash_can_count: Number(e.target.value) }))} />
-        </FormField>
         <button className={primaryButtonClass} type="submit">
           {editingId ? "保存房间" : "新增房间"}
         </button>
@@ -251,10 +207,6 @@ export function RoomsPage() {
             { header: "房间名", cell: (row) => row.room_name },
             { header: "类型", cell: (row) => row.room_type },
             { header: "床位", cell: (row) => row.bed_count },
-            { header: "床型", cell: (row) => row.bed_size ?? "-" },
-            { header: "灯具", cell: (row) => row.light_type ?? "-" },
-            { header: "床头柜", cell: (row) => row.nightstand_count ?? 0 },
-            { header: "垃圾桶", cell: (row) => row.trash_can_count ?? 0 },
             { header: "性别限制", cell: (row) => row.gender_limit },
             { header: "状态", cell: (row) => row.status },
             {

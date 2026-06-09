@@ -7,6 +7,7 @@ const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/dorms", label: "宿舍" },
   { to: "/rooms", label: "房间" },
+  { to: "/room-assets", label: "房间资产" },
   { to: "/people", label: "人员" },
   { to: "/stay", label: "停留风险" },
   { to: "/allocations", label: "入住分配" },

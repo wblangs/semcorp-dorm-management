@@ -435,7 +435,10 @@ def update_room(room_id: int, payload: RoomUpdate, db: Session, operator: str = 
     room = _get_active(db, Room, room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    values = payload.model_dump(exclude_none=True)
+    # exclude_unset: only update fields the client actually sent. This lets the Room
+    # Assets page clear a value (send null explicitly) while leaving untouched fields
+    # (e.g. assets when editing basic room info) unchanged.
+    values = payload.model_dump(exclude_unset=True)
     if "dorm_id" in values and not _get_active(db, Dorm, values["dorm_id"]):
         raise HTTPException(status_code=400, detail="Dorm does not exist")
     before = _model_data(room)
