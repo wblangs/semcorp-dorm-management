@@ -5,7 +5,9 @@ import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
-import type { Allocation, Person, StayRecord } from "../types";
+import type { Allocation, Dorm, Person, Room, StayRecord } from "../types";
+
+const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
 type PersonFormState = {
   chinese_name: string;
@@ -47,24 +49,32 @@ export function PeoplePage() {
   const [rows, setRows] = useState<Person[]>([]);
   const [stays, setStays] = useState<StayRecord[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [dorms, setDorms] = useState<Dorm[]>([]);
   const [form, setForm] = useState<PersonFormState>(emptyForm);
   const [stayForm, setStayForm] = useState<StayFormState>(emptyStayForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [quickSelection, setQuickSelection] = useState<Record<number, string>>({});
+  const [assigningId, setAssigningId] = useState<number | null>(null);
 
   const load = async () => {
     try {
       setLoading(true);
-      const [peopleData, stayData, allocationData] = await Promise.all([
+      const [peopleData, stayData, allocationData, roomData, dormData] = await Promise.all([
         api.getPeople(),
         api.getStays(),
         api.getAllocations(),
+        api.getRooms(),
+        api.getDorms(),
       ]);
       setRows(peopleData);
       setStays(stayData);
       setAllocations(allocationData);
+      setRooms(roomData);
+      setDorms(dormData);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -156,9 +166,68 @@ export function PeoplePage() {
       ];
 
   const stayMap = new Map(stays.map((stay) => [stay.person_id, stay]));
-  const activeAllocationPersonIds = new Set(
-    allocations.filter((allocation) => allocation.status === "active").map((allocation) => allocation.person_id),
+  const activeAllocations = useMemo(
+    () => allocations.filter((allocation) => allocation.status === "active"),
+    [allocations],
   );
+  const activeAllocationPersonIds = useMemo(
+    () => new Set(activeAllocations.map((allocation) => allocation.person_id)),
+    [activeAllocations],
+  );
+  const activeAllocationByPerson = useMemo(
+    () => new Map(activeAllocations.map((allocation) => [allocation.person_id, allocation])),
+    [activeAllocations],
+  );
+  const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
+  const roomMap = useMemo(() => new Map(rooms.map((room) => [room.id, room.room_name])), [rooms]);
+
+  const roomOccupancy = useMemo(() => {
+    const counts = new Map<number, number>();
+    activeAllocations.forEach((allocation) => {
+      counts.set(allocation.room_id, (counts.get(allocation.room_id) ?? 0) + 1);
+    });
+    return counts;
+  }, [activeAllocations]);
+
+  const availableRooms = useMemo(() => {
+    const activeDormIds = new Set(dorms.filter((dorm) => isActiveStatus(dorm.status)).map((dorm) => dorm.id));
+    return rooms
+      .filter((room) => activeDormIds.has(room.dorm_id) && isActiveStatus(room.status))
+      .map((room) => ({
+        ...room,
+        dormName: dormMap.get(room.dorm_id) ?? "Unknown",
+        available_beds: Math.max(room.bed_count - (roomOccupancy.get(room.id) ?? 0), 0),
+      }))
+      .filter((room) => room.available_beds > 0);
+  }, [dormMap, dorms, roomOccupancy, rooms]);
+
+  const availableRoomsForPerson = (person: Person) =>
+    availableRooms.filter((room) => room.gender_limit === "Any" || room.gender_limit === person.gender);
+
+  const onQuickAssign = async (person: Person, roomId: number) => {
+    const room = availableRooms.find((item) => item.id === roomId);
+    if (!room) return;
+    setError("");
+    setAssigningId(person.id);
+    try {
+      await api.createAllocation({
+        person_id: person.id,
+        dorm_id: room.dorm_id,
+        room_id: room.id,
+        check_in_date: new Date().toISOString().slice(0, 10),
+      });
+      setQuickSelection((prev) => {
+        const next = { ...prev };
+        delete next[person.id];
+        return next;
+      });
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAssigningId(null);
+    }
+  };
 
   const riskBadgeClass = (risk: StayRecord["risk_level"]) => {
     if (risk === "red") return "bg-red-100 text-red-700";
@@ -321,6 +390,49 @@ export function PeoplePage() {
             {
               header: "当前住宿状态",
               cell: (row) => (activeAllocationPersonIds.has(row.id) ? "在住" : "未入住"),
+            },
+            {
+              header: "快速入住",
+              cell: (row) => {
+                if (activeAllocationPersonIds.has(row.id)) {
+                  const allocation = activeAllocationByPerson.get(row.id);
+                  return (
+                    <span className="text-slate-500">
+                      {allocation
+                        ? `${dormMap.get(allocation.dorm_id) ?? "?"} / ${roomMap.get(allocation.room_id) ?? "?"}`
+                        : "在住"}
+                    </span>
+                  );
+                }
+                const roomChoices = availableRoomsForPerson(row);
+                if (roomChoices.length === 0) {
+                  return <span className="text-slate-400">暂无空房间</span>;
+                }
+                const selected = quickSelection[row.id] ?? String(roomChoices[0].id);
+                return (
+                  <div className="flex items-center gap-2">
+                    <select
+                      className={fieldControlClass}
+                      value={selected}
+                      onChange={(e) => setQuickSelection((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                    >
+                      {roomChoices.map((room) => (
+                        <option key={room.id} value={room.id}>
+                          {room.dormName} / {room.room_name}（{room.available_beds}）
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className={primaryButtonClass}
+                      type="button"
+                      disabled={assigningId === row.id}
+                      onClick={() => void onQuickAssign(row, Number(selected))}
+                    >
+                      {assigningId === row.id ? "提交中..." : "入住"}
+                    </button>
+                  </div>
+                );
+              },
             },
             {
               header: "操作",
