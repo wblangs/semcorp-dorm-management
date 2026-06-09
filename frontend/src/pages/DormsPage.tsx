@@ -5,7 +5,7 @@ import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useAuth } from "../auth/AuthContext";
 import { useDictionaries } from "../hooks/useDictionaries";
-import type { Dorm } from "../types";
+import type { Dorm, Vehicle } from "../types"; // CHANGED: 加入 Vehicle 类型
 
 type DormFormState = {
   name: string;
@@ -29,6 +29,10 @@ export function DormsPage() {
   const { isAdmin } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Dorm[]>([]);
+
+  // ADDED: 保存车辆列表，用来根据车辆的 base_dorm_id 反查宿舍车辆
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -38,7 +42,15 @@ export function DormsPage() {
   const load = async () => {
     try {
       setLoading(true);
-      setRows(await api.getDorms());
+
+      // CHANGED: 同时读取宿舍和车辆
+      const [dormData, vehicleData] = await Promise.all([
+        api.getDorms(),
+        api.getVehicles(),
+      ]);
+
+      setRows(dormData);
+      setVehicles(vehicleData);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -99,15 +111,43 @@ export function DormsPage() {
     }
   };
 
+  // ADDED: 根据车辆的 base_dorm_id，把车牌分组到对应宿舍
+  const dormVehicleMap = useMemo(() => {
+    const map = new Map<number, string[]>();
+
+    vehicles.forEach((vehicle) => {
+      if (!vehicle.base_dorm_id) return;
+
+      const plates = map.get(vehicle.base_dorm_id) ?? [];
+      plates.push(vehicle.plate_number);
+      map.set(vehicle.base_dorm_id, plates);
+    });
+
+    return map;
+  }, [vehicles]);
+
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return rows;
-    return rows.filter((row) =>
-      [row.id, row.name, row.type, row.address, row.lease_start_date, row.lease_end_date, row.status]
+
+    return rows.filter((row) => {
+      // ADDED: 搜索时也可以搜到宿舍车辆车牌
+      const vehiclePlates = dormVehicleMap.get(row.id)?.join(", ") ?? "";
+
+      return [
+        row.id,
+        row.name,
+        row.type,
+        row.address,
+        row.lease_start_date,
+        row.lease_end_date,
+        row.status,
+        vehiclePlates, // ADDED
+      ]
         .filter((value) => value !== null && value !== undefined)
-        .some((value) => String(value).toLowerCase().includes(keyword)),
-    );
-  }, [rows, search]);
+        .some((value) => String(value).toLowerCase().includes(keyword));
+    });
+  }, [rows, search, dormVehicleMap]); // CHANGED: 加入 dormVehicleMap
 
   return (
     <section className="space-y-4">
@@ -117,13 +157,13 @@ export function DormsPage() {
           <input className={fieldControlClass} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
         </FormField>
         <FormField label="类型" required>
-        <select className={fieldControlClass} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} required>
-          {dictionaries.dormTypes.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          <select className={fieldControlClass} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} required>
+            {dictionaries.dormTypes.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </FormField>
         <FormField label="地址" required>
           <input className={fieldControlClass} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} required />
@@ -135,13 +175,13 @@ export function DormsPage() {
           <input className={fieldControlClass} type="date" value={form.lease_end_date} onChange={(e) => setForm((f) => ({ ...f, lease_end_date: e.target.value }))} />
         </FormField>
         <FormField label="状态" required>
-        <select className={fieldControlClass} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} required>
-          {dictionaries.statuses.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          <select className={fieldControlClass} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} required>
+            {dictionaries.statuses.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </FormField>
         <button className={primaryButtonClass} type="submit">
           {editingId ? "保存宿舍" : "新增宿舍"}
@@ -171,34 +211,45 @@ export function DormsPage() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="搜索宿舍记录"
           />
-        <DataTable
-          rows={filteredRows}
-          rowKey={(row) => row.id}
-          emptyText="没有匹配记录"
-          columns={[
-            { header: "名称", cell: (row) => row.name },
-            { header: "类型", cell: (row) => row.type },
-            { header: "地址", cell: (row) => row.address },
-            { header: "租期开始", cell: (row) => row.lease_start_date ?? "-" },
-            { header: "租期结束", cell: (row) => row.lease_end_date ?? "-" },
-            { header: "状态", cell: (row) => row.status },
-            {
-              header: "操作",
-              cell: (row) => (
-                <div className="flex gap-2">
-                  <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
-                    修改
-                  </button>
-                  {isAdmin ? (
-                    <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
-                      删除
+          <DataTable
+            rows={filteredRows}
+            rowKey={(row) => row.id}
+            emptyText="没有匹配记录"
+            columns={[
+              { header: "ID", cell: (row) => row.id },
+              { header: "名称", cell: (row) => row.name },
+              { header: "类型", cell: (row) => row.type },
+              { header: "地址", cell: (row) => row.address },
+
+              // ADDED: 宿舍车辆列
+              {
+                header: "宿舍车辆",
+                cell: (row) => {
+                  const plates = dormVehicleMap.get(row.id) ?? [];
+                  return plates.length > 0 ? plates.join(", ") : "-";
+                },
+              },
+
+              { header: "租期开始", cell: (row) => row.lease_start_date ?? "-" },
+              { header: "租期结束", cell: (row) => row.lease_end_date ?? "-" },
+              { header: "状态", cell: (row) => row.status },
+              {
+                header: "操作",
+                cell: (row) => (
+                  <div className="flex gap-2">
+                    <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
+                      修改
                     </button>
-                  ) : null}
-                </div>
-              ),
-            },
-          ]}
-        />
+                    {isAdmin ? (
+                      <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
+                        删除
+                      </button>
+                    ) : null}
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       )}
     </section>
