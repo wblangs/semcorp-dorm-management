@@ -11,6 +11,7 @@ const navItems = [
   { to: "/people", label: "人员" },
   { to: "/stay", label: "停留风险" },
   { to: "/allocations", label: "入住分配" },
+  { to: "/summary", label: "汇总报表" },
   { to: "/check-in-records", label: "入住备份记录", adminOnly: true },
   { to: "/vehicles", label: "车辆" },
   { to: "/dictionaries", label: "字典", adminOnly: true },
