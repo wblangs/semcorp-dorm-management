@@ -106,23 +106,38 @@ export function RoomsPage() {
   };
 
   const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
+  // Light tint per dorm, so rooms of the same dorm read as a group.
+  const DORM_COLORS = ["FEE2E2", "DBEAFE", "DCFCE7", "FFEDD5", "EDE9FE", "CCFBF1", "FEF9C3", "FCE7F3"];
+  const dormColor = useMemo(() => {
+    const map = new Map<number, string>();
+    dorms.forEach((dorm, index) => map.set(dorm.id, DORM_COLORS[index % DORM_COLORS.length]));
+    return map;
+  }, [dorms]);
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (!keyword) return rows;
-    return rows.filter((row) =>
-      [
-        row.id,
-        dormMap.get(row.dorm_id),
-        row.dorm_id,
-        row.room_name,
-        row.room_type,
-        row.bed_count,
-        row.gender_limit,
-        row.status,
-      ]
-        .filter((value) => value !== null && value !== undefined)
-        .some((value) => String(value).toLowerCase().includes(keyword)),
-    );
+    const matched = keyword
+      ? rows.filter((row) =>
+          [
+            row.id,
+            dormMap.get(row.dorm_id),
+            row.dorm_id,
+            row.room_name,
+            row.room_type,
+            row.bed_count,
+            row.gender_limit,
+            row.status,
+          ]
+            .filter((value) => value !== null && value !== undefined)
+            .some((value) => String(value).toLowerCase().includes(keyword)),
+        )
+      : rows;
+    // Group rooms of the same dorm together (then by room name).
+    return [...matched].sort((a, b) => {
+      const dormA = dormMap.get(a.dorm_id) ?? String(a.dorm_id);
+      const dormB = dormMap.get(b.dorm_id) ?? String(b.dorm_id);
+      if (dormA !== dormB) return dormA.localeCompare(dormB, "zh-Hans-CN");
+      return a.room_name.localeCompare(b.room_name, "zh-Hans-CN");
+    });
   }, [dormMap, rows, search]);
 
   return (
@@ -204,6 +219,7 @@ export function RoomsPage() {
           rows={filteredRows}
           rowKey={(row) => row.id}
           emptyText="没有匹配记录"
+          rowStyle={(row) => ({ backgroundColor: `#${dormColor.get(row.dorm_id) ?? "FFFFFF"}` })}
           columns={[
             { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
             { header: "房间名", cell: (row) => row.room_name },

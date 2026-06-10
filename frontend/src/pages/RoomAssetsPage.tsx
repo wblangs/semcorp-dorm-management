@@ -10,14 +10,14 @@ import { todayISO } from "../utils/date";
 // One colour family per dorm: [light shade, deep shade]. Rooms within a dorm
 // alternate between the two shades so adjacent rooms stay distinguishable.
 const DORM_PALETTE: [string, string][] = [
-  ["FEE2E2", "FCA5A5"], // red
-  ["DBEAFE", "93C5FD"], // blue
-  ["DCFCE7", "86EFAC"], // green
-  ["FFEDD5", "FDBA74"], // orange
-  ["EDE9FE", "C4B5FD"], // purple
-  ["CCFBF1", "5EEAD4"], // teal
-  ["FEF9C3", "FDE68A"], // yellow
-  ["FCE7F3", "F9A8D4"], // pink
+  ["FEF2F2", "FEE2E2"], // red
+  ["EFF6FF", "DBEAFE"], // blue
+  ["F0FDF4", "DCFCE7"], // green
+  ["FFF7ED", "FFEDD5"], // orange
+  ["F5F3FF", "EDE9FE"], // purple
+  ["F0FDFA", "CCFBF1"], // teal
+  ["FEFCE8", "FEF9C3"], // yellow
+  ["FDF2F8", "FCE7F3"], // pink
 ];
 
 const HEADER_FILL = "4472C4";

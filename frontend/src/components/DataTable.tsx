@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type Column<T> = {
   header: string;
@@ -10,9 +10,10 @@ type DataTableProps<T> = {
   rows: T[];
   rowKey: (row: T) => string | number;
   emptyText?: string;
+  rowStyle?: (row: T) => CSSProperties | undefined;
 };
 
-export function DataTable<T>({ columns, rows, rowKey, emptyText = "暂无数据" }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, emptyText = "暂无数据", rowStyle }: DataTableProps<T>) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table className="min-w-full text-left text-sm">
@@ -34,7 +35,7 @@ export function DataTable<T>({ columns, rows, rowKey, emptyText = "暂无数据"
             </tr>
           ) : null}
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="border-t border-slate-100 hover:bg-slate-50">
+            <tr key={rowKey(row)} className="border-t border-slate-100 hover:bg-slate-50" style={rowStyle?.(row)}>
               {columns.map((column) => (
                 <td key={column.header} className="px-4 py-3 text-slate-700">
                   {column.cell(row)}

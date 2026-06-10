@@ -703,6 +703,7 @@ export function AllocationPage() {
       </form>
       ) : null}
 
+      {canEdit ? (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="mb-2 text-sm font-semibold text-slate-800">人员信息</h3>
@@ -741,6 +742,7 @@ export function AllocationPage() {
           )}
         </div>
       </div>
+      ) : null}
 
       {!loading ? (
         <div className="space-y-3">
