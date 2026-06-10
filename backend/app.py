@@ -9,7 +9,7 @@ from backend.api import router as api_router
 from backend.core.config import settings
 from backend.database.session import engine, run_lightweight_migrations, Session
 from backend.models import Base
-from backend.services.management import seed_default_dictionaries
+from backend.services.management import backfill_room_items, seed_default_dictionaries
 
 app = FastAPI(title="外派员工宿舍与通勤管理系统")
 
@@ -66,3 +66,4 @@ Base.metadata.create_all(engine)
 run_lightweight_migrations()
 with Session(engine) as session:
     seed_default_dictionaries(session)
+    backfill_room_items(session)

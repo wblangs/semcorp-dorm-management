@@ -6,6 +6,7 @@ import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { Allocation, Dorm, Person, Room, StayRecord } from "../types";
+import { todayISO } from "../utils/date";
 
 const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
@@ -214,7 +215,7 @@ export function PeoplePage() {
         person_id: person.id,
         dorm_id: room.dorm_id,
         room_id: room.id,
-        check_in_date: new Date().toISOString().slice(0, 10),
+        check_in_date: todayISO(),
       });
       setQuickSelection((prev) => {
         const next = { ...prev };

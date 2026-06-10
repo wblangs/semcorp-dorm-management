@@ -29,8 +29,17 @@ export type Room = {
   status: string;
   bed_size: string | null;
   light_type: string | null;
+  light_count: number;
   nightstand_count: number;
   trash_can_count: number;
+};
+
+export type RoomItem = {
+  id: number;
+  room_id: number;
+  name: string;
+  item_type: string | null;
+  count: number;
 };
 
 export type Person = {

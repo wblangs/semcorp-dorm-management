@@ -7,8 +7,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.auth import create_access_token, hash_password, normalize_username, verify_password
+from backend.core.clock import local_now, local_today
 from backend.core.config import settings
-from backend.models import AuditLog, Allocation, Dictionary, DictionaryItem, Dorm, Person, Room, Stay, User, Vehicle
+from backend.models import AuditLog, Allocation, Dictionary, DictionaryItem, Dorm, Person, Room, RoomItem, Stay, User, Vehicle
 from backend.schemas import (
     AllocationCreate,
     AllocationUpdate,
@@ -20,6 +21,8 @@ from backend.schemas import (
     PersonUpdate,
     RoomCreate,
     RoomUpdate,
+    RoomItemCreate,
+    RoomItemUpdate,
     StayUpsert,
     VehicleCreate,
     VehicleUpdate,
@@ -37,13 +40,9 @@ DEFAULT_DICTIONARIES = {
         "label": "房间类型",
         "items": [("Single", "Single"), ("Double", "Double"), ("Suite", "Suite")],
     },
-    "bedSizes": {
-        "label": "床型",
-        "items": [("Twin", "Twin"), ("Full", "Full"), ("Queen", "Queen"), ("King", "King")],
-    },
-    "lightTypes": {
-        "label": "灯具类型",
-        "items": [("落地灯", "落地灯"), ("顶灯", "顶灯")],
+    "assetItems": {
+        "label": "资产物品",
+        "items": [("床", "床"), ("灯", "灯"), ("床头柜", "床头柜"), ("垃圾桶", "垃圾桶")],
     },
     "personTypes": {
         "label": "人员类型",
@@ -190,7 +189,7 @@ def login(username: str, password: str, db: Session):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     if user.status != "active":
         raise HTTPException(status_code=403, detail="用户已禁用")
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = local_now()
     db.commit()
     db.refresh(user)
     return {"token": create_access_token(user.username), "user": _serialize_user(user)}
@@ -472,6 +471,89 @@ def delete_room(room_id: int, db: Session, operator: str = "admin"):
     return {"deleted": True}
 
 
+# ---- Room items (flexible per-room inventory) ----
+
+def list_room_items(db: Session, room_id: Optional[int] = None):
+    stmt = _active_stmt(RoomItem).order_by(RoomItem.id.asc())
+    if room_id is not None:
+        stmt = stmt.where(RoomItem.room_id == room_id)
+    return db.scalars(stmt).all()
+
+
+def create_room_item(payload: RoomItemCreate, db: Session, operator: str = "admin"):
+    if not _get_active(db, Room, payload.room_id):
+        raise HTTPException(status_code=400, detail="房间不存在")
+    item = RoomItem(
+        room_id=payload.room_id,
+        name=payload.name.strip(),
+        item_type=(payload.item_type or "").strip() or None,
+        count=payload.count,
+    )
+    db.add(item)
+    db.flush()
+    _audit(db, entity_type="room_item", entity_id=item.id, action="create", before_data=None, after_data=_model_data(item), operator=operator)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def update_room_item(item_id: int, payload: RoomItemUpdate, db: Session, operator: str = "admin"):
+    item = _get_active(db, RoomItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="资产不存在")
+    values = payload.model_dump(exclude_unset=True)
+    before = _model_data(item)
+    if "name" in values and values["name"] is not None:
+        item.name = values["name"].strip()
+    if "item_type" in values:
+        item.item_type = (values["item_type"] or "").strip() or None if values["item_type"] is not None else None
+    if "count" in values and values["count"] is not None:
+        item.count = values["count"]
+    db.flush()
+    _audit(db, entity_type="room_item", entity_id=item.id, action="update", before_data=before, after_data=_model_data(item), operator=operator)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def delete_room_item(item_id: int, db: Session, operator: str = "admin"):
+    item = _get_active(db, RoomItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="资产不存在")
+    before = _model_data(item)
+    item.is_deleted = True
+    db.flush()
+    _audit(db, entity_type="room_item", entity_id=item.id, action="delete", before_data=before, after_data=_model_data(item), operator=operator)
+    db.commit()
+    return {"deleted": True}
+
+
+def backfill_room_items(db: Session) -> None:
+    """One-time migration of legacy fixed asset columns into room_items.
+
+    Runs only when the room_items table is completely empty, so it won't
+    re-create items a user has since deleted.
+    """
+    existing = db.scalar(select(func.count(RoomItem.id))) or 0
+    if existing > 0:
+        return
+    rooms = db.scalars(_active_stmt(Room)).all()
+    added = False
+    for room in rooms:
+        legacy = [
+            ("床", getattr(room, "bed_size", None), getattr(room, "bed_count", 0) or 0),
+            ("灯", getattr(room, "light_type", None), getattr(room, "light_count", 0) or 0),
+            ("床头柜", None, getattr(room, "nightstand_count", 0) or 0),
+            ("垃圾桶", None, getattr(room, "trash_can_count", 0) or 0),
+        ]
+        for name, item_type, count in legacy:
+            if count > 0 or item_type:
+                db.add(RoomItem(room_id=room.id, name=name, item_type=item_type, count=count or 1))
+                added = True
+    if added:
+        db.commit()
+
+
 def list_people(db: Session):
     return db.scalars(_active_stmt(Person).order_by(Person.id.desc())).all()
 
@@ -530,7 +612,7 @@ def list_stay(db: Session):
     people = db.scalars(_active_stmt(Person).order_by(Person.id.asc())).all()
     stays = db.scalars(_active_stmt(Stay)).all()
     stay_map = {stay.person_id: stay for stay in stays}
-    today = date.today()
+    today = local_today()
     return [_serialize_stay(stay_map.get(person.id), person, today) for person in people]
 
 
@@ -538,7 +620,7 @@ def get_stay(person_id: int, db: Session):
     person = _get_active(db, Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="人员不存在")
-    today = date.today()
+    today = local_today()
     stay = _get_active(db, Stay, person_id)
     return _serialize_stay(stay, person, today)
 
@@ -564,7 +646,7 @@ def upsert_stay(payload: StayUpsert, db: Session, operator: str = "admin"):
     _audit(db, entity_type="stay", entity_id=stay.person_id, action=action, before_data=before, after_data=_model_data(stay), operator=operator)
     db.commit()
     db.refresh(stay)
-    return _serialize_stay(stay, person, date.today())
+    return _serialize_stay(stay, person, local_today())
 
 
 def delete_stay(stay_id: int, db: Session, operator: str = "admin"):
@@ -716,7 +798,7 @@ def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Sessio
     if allocation.status == "checked_out":
         raise HTTPException(status_code=400, detail="该入住记录已退宿")
     before = _model_data(allocation)
-    checkout_date = payload.check_out_date or date.today()
+    checkout_date = payload.check_out_date or local_today()
     allocation.actual_check_out_date = checkout_date
     allocation.check_out_date = checkout_date
     allocation.status = "checked_out"
@@ -939,6 +1021,11 @@ def seed_default_dictionaries(db: Session):
                         sort_order=sort_order,
                     )
                 )
+    # Retire legacy dictionaries replaced by the combined assetItems dictionary.
+    for legacy_key in ("bedSizes", "lightTypes"):
+        legacy = db.scalar(select(Dictionary).where(Dictionary.key == legacy_key))
+        if legacy and not legacy.is_deleted:
+            legacy.is_deleted = True
     db.commit()
 
 
@@ -1056,7 +1143,7 @@ def dashboard(db: Session):
         select(func.count(Vehicle.id)).where(Vehicle.status == "disabled", Vehicle.is_deleted.is_(False))
     ) or 0
 
-    today = date.today()
+    today = local_today()
     red_deadline = today + timedelta(days=30)
     yellow_deadline = today + timedelta(days=60)
 
@@ -1151,7 +1238,7 @@ def dashboard(db: Session):
 
 
 def alerts(db: Session):
-    today = date.today()
+    today = local_today()
     red_deadline = today + timedelta(days=30)
     yellow_deadline = today + timedelta(days=60)
 

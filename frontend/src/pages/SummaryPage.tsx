@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { fieldControlClass, primaryButtonClass } from "../components/FormField";
 import type { Allocation, Dorm, Person, Room } from "../types";
+import { todayISO } from "../utils/date";
 
 // Pastel band colors (hex, no leading #). One per dorm, cycled in dorm order.
 const DORM_PALETTE = [
@@ -194,7 +195,7 @@ export function SummaryPage() {
       sheet.views = [{ state: "frozen", ySplit: 1 }];
 
       const buffer = await workbook.xlsx.writeBuffer();
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = todayISO();
       saveAs(new Blob([buffer], { type: "application/octet-stream" }), `宿舍汇总_${stamp}.xlsx`);
     } catch (err) {
       setError((err as Error).message);

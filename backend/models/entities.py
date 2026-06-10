@@ -47,6 +47,8 @@ class Room(TimestampSoftDeleteMixin, Base):
     bed_size: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     # 灯 light type: 落地灯 / 顶灯
     light_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # 灯 light count
+    light_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # 床头柜 nightstand count
     nightstand_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # 垃圾桶 trash can count
@@ -54,6 +56,18 @@ class Room(TimestampSoftDeleteMixin, Base):
 
     dorm: Mapped["Dorm"] = relationship(back_populates="rooms")
     allocations: Mapped[list["Allocation"]] = relationship(back_populates="room")
+
+
+class RoomItem(TimestampSoftDeleteMixin, Base):
+    """A flexible inventory item belonging to a room (床/灯/床头柜/垃圾桶/任意自定义物品)."""
+
+    __tablename__ = "room_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    item_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
 
 class Person(TimestampSoftDeleteMixin, Base):

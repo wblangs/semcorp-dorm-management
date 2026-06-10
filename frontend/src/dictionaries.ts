@@ -1,8 +1,7 @@
 export type DictionaryKey =
   | "dormTypes"
   | "roomTypes"
-  | "bedSizes"
-  | "lightTypes"
+  | "assetItems"
   | "personTypes"
   | "departments"
   | "visaTypes"
@@ -20,8 +19,7 @@ export type DictionaryState = Record<DictionaryKey, DictionaryOption[]>;
 export const dictionaryLabels: Record<DictionaryKey, string> = {
   dormTypes: "宿舍类型",
   roomTypes: "房间类型",
-  bedSizes: "床型",
-  lightTypes: "灯具类型",
+  assetItems: "资产物品",
   personTypes: "人员类型",
   departments: "部门",
   visaTypes: "签证类型",
@@ -40,15 +38,11 @@ export const defaultDictionaries: DictionaryState = {
     { label: "Double", value: "Double" },
     { label: "Suite", value: "Suite" },
   ],
-  bedSizes: [
-    { label: "Twin", value: "Twin" },
-    { label: "Full", value: "Full" },
-    { label: "Queen", value: "Queen" },
-    { label: "King", value: "King" },
-  ],
-  lightTypes: [
-    { label: "落地灯", value: "落地灯" },
-    { label: "顶灯", value: "顶灯" },
+  assetItems: [
+    { label: "床", value: "床" },
+    { label: "灯", value: "灯" },
+    { label: "床头柜", value: "床头柜" },
+    { label: "垃圾桶", value: "垃圾桶" },
   ],
   personTypes: [
     { label: "Employee", value: "Employee" },

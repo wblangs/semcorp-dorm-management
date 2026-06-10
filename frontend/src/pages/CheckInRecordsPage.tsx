@@ -12,6 +12,7 @@ import {
   secondaryButtonClass,
 } from "../components/FormField";
 import type { Allocation, Dorm, Person, Room } from "../types";
+import { todayISO } from "../utils/date";
 
 export function CheckInRecordsPage() {
   const { isAdmin } = useAuth();
@@ -156,7 +157,7 @@ export function CheckInRecordsPage() {
     setError("");
 
     try {
-      await api.checkoutAllocation(row.id, new Date().toISOString().slice(0, 10));
+      await api.checkoutAllocation(row.id, todayISO());
       await load();
     } catch (err) {
       setError((err as Error).message);

@@ -60,6 +60,8 @@ def run_lightweight_migrations() -> None:
                 safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN bed_size VARCHAR(20)")
             if "light_type" not in room_columns:
                 safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN light_type VARCHAR(20)")
+            if "light_count" not in room_columns:
+                safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN light_count INTEGER DEFAULT 0 NOT NULL")
             if "nightstand_count" not in room_columns:
                 safe_add_column(conn, "ALTER TABLE rooms ADD COLUMN nightstand_count INTEGER DEFAULT 0 NOT NULL")
             if "trash_can_count" not in room_columns:

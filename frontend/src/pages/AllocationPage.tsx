@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import type { Allocation, AvailableRoom, Dorm, Person, Room } from "../types";
+import { todayISO } from "../utils/date";
 
 type Occupant = {
   id: number;
@@ -67,7 +68,7 @@ export function AllocationPage() {
     person_id: "",
     dorm_id: "",
     room_id: "",
-    check_in_date: new Date().toISOString().slice(0, 10),
+    check_in_date: todayISO(),
     expected_check_out_date: "",
     note: "",
   });
@@ -437,7 +438,7 @@ export function AllocationPage() {
   const onCheckout = async (row: Allocation) => {
     setError("");
     try {
-      await api.checkoutAllocation(row.id, new Date().toISOString().slice(0, 10));
+      await api.checkoutAllocation(row.id, todayISO());
       await load();
     } catch (err) {
       setError((err as Error).message);

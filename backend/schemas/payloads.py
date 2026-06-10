@@ -31,6 +31,7 @@ class RoomCreate(BaseModel):
     status: str = "active"
     bed_size: Optional[str] = None
     light_type: Optional[str] = None
+    light_count: int = Field(default=0, ge=0)
     nightstand_count: int = Field(default=0, ge=0)
     trash_can_count: int = Field(default=0, ge=0)
 
@@ -44,8 +45,22 @@ class RoomUpdate(BaseModel):
     status: Optional[str] = None
     bed_size: Optional[str] = None
     light_type: Optional[str] = None
+    light_count: Optional[int] = Field(default=None, ge=0)
     nightstand_count: Optional[int] = Field(default=None, ge=0)
     trash_can_count: Optional[int] = Field(default=None, ge=0)
+
+
+class RoomItemCreate(BaseModel):
+    room_id: int
+    name: str
+    item_type: Optional[str] = None
+    count: int = Field(default=1, ge=0)
+
+
+class RoomItemUpdate(BaseModel):
+    name: Optional[str] = None
+    item_type: Optional[str] = None
+    count: Optional[int] = Field(default=None, ge=0)
 
 
 class PersonCreate(BaseModel):

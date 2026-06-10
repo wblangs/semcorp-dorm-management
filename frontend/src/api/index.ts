@@ -8,6 +8,7 @@ import type {
   Dorm,
   Person,
   Room,
+  RoomItem,
   StayRecord,
   StayRiskPayload,
   SystemInfo,
@@ -19,7 +20,10 @@ type NewDorm = Omit<Dorm, "id">;
 type NewRoom = Omit<Room, "id">;
 // Assets (bed size, light, nightstand, trash can) are managed on the Room Assets page,
 // not at room creation, so they are optional when creating a room.
-type CreateRoomPayload = Omit<NewRoom, "bed_size" | "light_type" | "nightstand_count" | "trash_can_count">;
+type CreateRoomPayload = Omit<
+  NewRoom,
+  "bed_size" | "light_type" | "light_count" | "nightstand_count" | "trash_can_count"
+>;
 type NewPerson = Omit<Person, "id">;
 type NewVehicle = Omit<Vehicle, "id">;
 
@@ -77,6 +81,15 @@ export const api = {
   updateRoom: (id: number, payload: Partial<NewRoom>) =>
     apiRequest<Room>(`/api/rooms/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteRoom: (id: number) => apiRequest<{ deleted: boolean }>(`/api/rooms/${id}`, { method: "DELETE" }),
+
+  getRoomItems: () => apiRequest<RoomItem[]>("/api/room-items"),
+  createRoomItem: (payload: { room_id: number; name: string; item_type?: string | null; count: number }) =>
+    apiRequest<RoomItem>("/api/room-items", { method: "POST", body: JSON.stringify(payload) }),
+  updateRoomItem: (
+    id: number,
+    payload: { name?: string; item_type?: string | null; count?: number },
+  ) => apiRequest<RoomItem>(`/api/room-items/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteRoomItem: (id: number) => apiRequest<{ deleted: boolean }>(`/api/room-items/${id}`, { method: "DELETE" }),
 
   getPeople: () => apiRequest<Person[]>("/api/people"),
   createPerson: (payload: NewPerson) =>

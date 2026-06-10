@@ -60,14 +60,7 @@ function AppRoutes() {
           }
         />
 
-        <Route
-          path="/vehicles"
-          element={
-            <AdminOnly>
-              <VehiclesPage />
-            </AdminOnly>
-          }
-        />
+        <Route path="/vehicles" element={<VehiclesPage />} />
         <Route
           path="/dictionaries"
           element={

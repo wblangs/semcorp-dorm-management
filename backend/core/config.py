@@ -13,6 +13,10 @@ class Settings:
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
     app_env: str = os.getenv("APP_ENV", "DEV").upper()
     cors_origins_raw: str = os.getenv("CORS_ORIGINS", "*")
+    # IANA timezone used for "today"/"now" date calculations (e.g. stay risk,
+    # default check-in/out dates). The server OS may run in UTC; this keeps
+    # date logic anchored to the site's local time.
+    app_timezone: str = os.getenv("APP_TIMEZONE", "America/New_York")
     app_version: str = "v0.7"
 
     @cached_property
@@ -45,6 +49,7 @@ class Settings:
             access_token_expire_minutes=int(source.get("ACCESS_TOKEN_EXPIRE_MINUTES", "480")),
             app_env=source.get("APP_ENV", "DEV").upper(),
             cors_origins_raw=source.get("CORS_ORIGINS", "*"),
+            app_timezone=source.get("APP_TIMEZONE", "America/New_York"),
         )
 
 

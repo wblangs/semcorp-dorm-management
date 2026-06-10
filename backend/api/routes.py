@@ -18,6 +18,8 @@ from backend.schemas import (
     PersonUpdate,
     RoomCreate,
     RoomUpdate,
+    RoomItemCreate,
+    RoomItemUpdate,
     StayUpsert,
     UserCreate,
     UserPasswordReset,
@@ -167,6 +169,36 @@ def update_room(
 @router.delete("/rooms/{room_id}")
 def delete_room(room_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     return management.delete_room(room_id, db, operator=current_user.username)
+
+
+@router.get("/room-items")
+def list_room_items(
+    room_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    return management.list_room_items(db, room_id)
+
+
+@router.post("/room-items")
+def create_room_item(payload: RoomItemCreate, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
+    return management.create_room_item(payload, db, operator=current_user.username)
+
+
+@router.put("/room-items/{item_id}")
+def update_room_item(
+    item_id: int,
+    payload: RoomItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.update_room_item(item_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/room-items/{item_id}")
+def delete_room_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
+    return management.delete_room_item(item_id, db, operator=current_user.username)
 
 
 @router.get("/people")
