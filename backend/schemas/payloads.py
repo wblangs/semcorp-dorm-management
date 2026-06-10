@@ -118,13 +118,13 @@ class UserCreate(BaseModel):
     username: str
     password: str
     display_name: Optional[str] = None
-    role: Literal["admin", "user"] = "user"
+    role: Literal["admin", "user", "viewer"] = "user"
     status: Literal["active", "disabled"] = "active"
 
 
 class UserUpdate(BaseModel):
     display_name: Optional[str] = None
-    role: Optional[Literal["admin", "user"]] = None
+    role: Optional[Literal["admin", "user", "viewer"]] = None
     status: Optional[Literal["active", "disabled"]] = None
 
 

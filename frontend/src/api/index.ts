@@ -35,14 +35,14 @@ export const api = {
     username: string;
     password: string;
     display_name?: string | null;
-    role: "admin" | "user";
+    role: "admin" | "user" | "viewer";
     status: "active" | "disabled";
   }) => apiRequest<User>("/api/users", { method: "POST", body: JSON.stringify(payload) }),
   updateUser: (
     id: number,
     payload: {
       display_name?: string | null;
-      role?: "admin" | "user";
+      role?: "admin" | "user" | "viewer";
       status?: "active" | "disabled";
     },
   ) => apiRequest<User>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),

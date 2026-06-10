@@ -9,6 +9,8 @@ type AuthContextValue = {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  /** True for admin and user roles; false for read-only viewers. Gate all edit UI on this. */
+  canEdit: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -54,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       isAdmin: user?.role === "admin",
+      canEdit: user?.role === "admin" || user?.role === "user",
       login: async (username: string, password: string) => {
         const result = await api.login({ username, password });
         setAuthToken(result.token);

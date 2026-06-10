@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user, require_admin
+from backend.auth import get_current_user, require_admin, require_editor
 from backend.database.session import get_db
 from backend.models import User
 from backend.schemas import (
@@ -93,7 +93,7 @@ def list_dorms(db: Session = Depends(get_db), current_user: User = Depends(get_c
 
 
 @router.post("/dorms")
-def create_dorm(payload: DormCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_dorm(payload: DormCreate, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.create_dorm(payload, db, operator=current_user.username)
 
 
@@ -102,7 +102,7 @@ def update_dorm(
     dorm_id: int,
     payload: DormUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.update_dorm(dorm_id, payload, db, operator=current_user.username)
 
@@ -150,7 +150,7 @@ def list_rooms(
 
 
 @router.post("/rooms")
-def create_room(payload: RoomCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_room(payload: RoomCreate, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.create_room(payload, db, operator=current_user.username)
 
 
@@ -159,7 +159,7 @@ def update_room(
     room_id: int,
     payload: RoomUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.update_room(room_id, payload, db, operator=current_user.username)
 
@@ -176,7 +176,7 @@ def list_people(db: Session = Depends(get_db), current_user: User = Depends(get_
 
 
 @router.post("/people")
-def create_person(payload: PersonCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_person(payload: PersonCreate, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.create_person(payload, db, operator=current_user.username)
 
 
@@ -185,7 +185,7 @@ def update_person(
     person_id: int,
     payload: PersonUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.update_person(person_id, payload, db, operator=current_user.username)
 
@@ -205,7 +205,7 @@ def list_stay_legacy(db: Session = Depends(get_db), current_user: User = Depends
 def upsert_stay_legacy(
     payload: StayUpsert,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.upsert_stay(payload, db, operator=current_user.username)
 
@@ -229,7 +229,7 @@ def get_stay(person_id: int, db: Session = Depends(get_db), current_user: User =
 
 
 @router.post("/stays/upsert")
-def upsert_stay(payload: StayUpsert, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def upsert_stay(payload: StayUpsert, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.upsert_stay(payload, db, operator=current_user.username)
 
 
@@ -254,7 +254,7 @@ def list_allocation_backup_history(db: Session = Depends(get_db), current_user: 
 def create_allocation(
     payload: AllocationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.create_allocation(payload, db, operator=current_user.username)
 
@@ -264,7 +264,7 @@ def update_allocation(
     allocation_id: int,
     payload: AllocationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.update_allocation(allocation_id, payload, db, operator=current_user.username)
 
@@ -274,7 +274,7 @@ def checkout_allocation(
     allocation_id: int,
     payload: CheckoutRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.checkout_allocation(allocation_id, payload, db, operator=current_user.username)
 
@@ -283,7 +283,7 @@ def checkout_allocation(
 def delete_allocation(
     allocation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.hide_allocation_from_user_history(allocation_id, db, operator=current_user.username)
 
@@ -327,7 +327,7 @@ def list_vehicles(db: Session = Depends(get_db), current_user: User = Depends(ge
 def create_vehicle(
     payload: VehicleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.create_vehicle(payload, db, operator=current_user.username)
 
@@ -337,7 +337,7 @@ def update_vehicle(
     vehicle_id: int,
     payload: VehicleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_editor),
 ):
     return management.update_vehicle(vehicle_id, payload, db, operator=current_user.username)
 

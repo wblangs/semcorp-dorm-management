@@ -26,7 +26,7 @@ const emptyForm: RoomFormState = {
 };
 
 export function RoomsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Room[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
@@ -128,6 +128,7 @@ export function RoomsPage() {
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">房间管理</h2>
+      {canEdit ? (
       <form onSubmit={onSubmit} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-3">
         <FormField label="宿舍" required>
         <select className={fieldControlClass} value={form.dorm_id} onChange={(e) => setForm((f) => ({ ...f, dorm_id: e.target.value }))} required>
@@ -186,6 +187,7 @@ export function RoomsPage() {
           </button>
         ) : null}
       </form>
+      ) : null}
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
       {loading ? (
@@ -213,14 +215,17 @@ export function RoomsPage() {
               header: "操作",
               cell: (row) => (
                 <div className="flex gap-2">
-                  <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
-                    修改
-                  </button>
+                  {canEdit ? (
+                    <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
+                      修改
+                    </button>
+                  ) : null}
                   {isAdmin ? (
                     <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
                       删除
                     </button>
                   ) : null}
+                  {!canEdit && !isAdmin ? <span className="text-slate-400">-</span> : null}
                 </div>
               ),
             },

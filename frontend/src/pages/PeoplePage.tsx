@@ -44,7 +44,7 @@ const emptyStayForm: StayFormState = {
 };
 
 export function PeoplePage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Person[]>([]);
   const [stays, setStays] = useState<StayRecord[]>([]);
@@ -274,6 +274,8 @@ export function PeoplePage() {
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">人员管理</h2>
+      {canEdit ? (
+      <>
       <form onSubmit={onSubmit} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-3">
         <FormField label="中文名" required>
           <input className={fieldControlClass} value={form.chinese_name} onChange={(e) => setForm((f) => ({ ...f, chinese_name: e.target.value }))} required />
@@ -354,6 +356,8 @@ export function PeoplePage() {
           </FormField>
         </div>
       </section>
+      </>
+      ) : null}
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
       {loading ? (
@@ -404,6 +408,9 @@ export function PeoplePage() {
                     </span>
                   );
                 }
+                if (!canEdit) {
+                  return <span className="text-slate-400">-</span>;
+                }
                 const roomChoices = availableRoomsForPerson(row);
                 if (roomChoices.length === 0) {
                   return <span className="text-slate-400">暂无空房间</span>;
@@ -438,14 +445,17 @@ export function PeoplePage() {
               header: "操作",
               cell: (row) => (
                 <div className="flex gap-2">
-                  <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
-                    修改
-                  </button>
+                  {canEdit ? (
+                    <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
+                      修改
+                    </button>
+                  ) : null}
                   {isAdmin ? (
                     <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
                       删除
                     </button>
                   ) : null}
+                  {!canEdit && !isAdmin ? <span className="text-slate-400">-</span> : null}
                 </div>
               ),
             },

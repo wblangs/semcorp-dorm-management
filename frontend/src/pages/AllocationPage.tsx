@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
+import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import type { Allocation, AvailableRoom, Dorm, Person, Room } from "../types";
@@ -40,6 +41,7 @@ type DormAvailabilityGroup = DormGenderRow & {
 const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
 export function AllocationPage() {
+  const { canEdit } = useAuth();
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
@@ -53,8 +55,12 @@ export function AllocationPage() {
   const [livingSearch, setLivingSearch] = useState("");
   const [checkoutSearch, setCheckoutSearch] = useState("");
   const [recordSectionsOpen, setRecordSectionsOpen] = useState({
-    living: true,
-    checkout: true,
+    living: false,
+    checkout: false,
+  });
+  const [topSectionsOpen, setTopSectionsOpen] = useState({
+    unassigned: false,
+    availability: false,
   });
 
   const [form, setForm] = useState({
@@ -177,12 +183,31 @@ export function AllocationPage() {
 
   const roomOptions = useMemo(() => {
     if (!editingId) return availableRooms;
-    return rooms.filter(
-      (room) =>
-        String(room.dorm_id) === form.dorm_id &&
-        (isActiveStatus(room.status) || String(room.id) === form.room_id),
-    );
-  }, [availableRooms, editingId, form.dorm_id, form.room_id, rooms]);
+    // When changing a person's room, show only rooms with an open bed and a
+    // matching gender limit (same idea as new-person assignment), plus the room
+    // they currently occupy so it stays selectable.
+    const person = people.find((p) => String(p.id) === form.person_id);
+    return rooms.filter((room) => {
+      if (String(room.dorm_id) !== form.dorm_id) return false;
+      if (String(room.id) === form.room_id) return true;
+      if (!isActiveStatus(room.status)) return false;
+      if (person && room.gender_limit !== "Any" && room.gender_limit !== person.gender) return false;
+      const occupancy = allocations.filter(
+        (allocation) =>
+          allocation.status === "active" && allocation.room_id === room.id && allocation.id !== editingId,
+      ).length;
+      return room.bed_count - occupancy > 0;
+    });
+  }, [allocations, availableRooms, editingId, form.dorm_id, form.person_id, form.room_id, people, rooms]);
+
+  // In edit mode, if the selected room is no longer a valid option (e.g. the dorm
+  // was changed), reset to the first available room so room_id can't point at a
+  // room from another dorm (which the backend rejects as "房间不属于该宿舍").
+  useEffect(() => {
+    if (!editingId) return;
+    if (roomOptions.some((room) => String(room.id) === form.room_id)) return;
+    setForm((f) => ({ ...f, room_id: String(roomOptions[0]?.id ?? "") }));
+  }, [editingId, roomOptions, form.room_id]);
 
   const selectedRoom = useMemo(
     () => roomOptions.find((room) => String(room.id) === form.room_id) ?? null,
@@ -441,6 +466,12 @@ export function AllocationPage() {
       [section]: !current[section],
     }));
   };
+  const toggleTopSection = (section: "unassigned" | "availability") => {
+    setTopSectionsOpen((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
+  };
 
   const renderDormMixChart = (group: DormAvailabilityGroup) => {
     const totalBeds = group.maleCount + group.femaleCount + group.availableBeds;
@@ -470,27 +501,45 @@ export function AllocationPage() {
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载未分配人员中...</div>
       ) : (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-slate-800">未分配房间人员</h3>
-          <DataTable
-            rows={unassignedPeople}
-            rowKey={(row) => row.id}
-            emptyText="暂无未分配房间人员"
-            columns={[
-              { header: "姓名", cell: (row) => `${row.chinese_name}/${row.english_name || "-"}` },
-              { header: "部门", cell: (row) => row.department },
-              { header: "性别", cell: (row) => row.gender },
-              { header: "人员类型", cell: (row) => row.person_type },
-            ]}
-          />
-        </div>
+        <section className="space-y-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50"
+            onClick={() => toggleTopSection("unassigned")}
+          >
+            <span className="font-semibold text-slate-900">未分配房间人员</span>
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{unassignedPeople.length}</span>
+            <span className="ml-auto font-medium text-slate-700">{topSectionsOpen.unassigned ? "收起" : "展开"}</span>
+          </button>
+          {topSectionsOpen.unassigned ? (
+            <DataTable
+              rows={unassignedPeople}
+              rowKey={(row) => row.id}
+              emptyText="暂无未分配房间人员"
+              columns={[
+                { header: "姓名", cell: (row) => `${row.chinese_name}/${row.english_name || "-"}` },
+                { header: "部门", cell: (row) => row.department },
+                { header: "性别", cell: (row) => row.gender },
+                { header: "人员类型", cell: (row) => row.person_type },
+              ]}
+            />
+          ) : null}
+        </section>
       )}
 
       {!loading ? (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-800">宿舍与可用房间</h3>
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left text-sm hover:bg-slate-50"
+            onClick={() => toggleTopSection("availability")}
+          >
+            <span className="font-semibold text-slate-900">宿舍与可用房间</span>
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{dormAvailabilityGroups.length}</span>
+            <span className="ml-auto font-medium text-slate-700">{topSectionsOpen.availability ? "收起" : "展开"}</span>
+          </button>
 
-          {dormAvailabilityGroups.length === 0 ? (
+          {!topSectionsOpen.availability ? null : dormAvailabilityGroups.length === 0 ? (
             <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">暂无宿舍</div>
           ) : (
             dormAvailabilityGroups.map((group) => (
@@ -538,6 +587,7 @@ export function AllocationPage() {
         </div>
       ) : null}
 
+      {canEdit ? (
       <form
         onSubmit={onSubmit}
         className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4"
@@ -650,6 +700,7 @@ export function AllocationPage() {
           </button>
         ) : null}
       </form>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -726,16 +777,19 @@ export function AllocationPage() {
                     { header: "状态", cell: () => "在住" },
                     {
                       header: "操作",
-                      cell: (row) => (
-                        <div className="flex gap-2">
-                          <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
-                            修改
-                          </button>
-                          <button className={editButtonClass} type="button" onClick={() => void onCheckout(row)}>
-                            退房
-                          </button>
-                        </div>
-                      ),
+                      cell: (row) =>
+                        canEdit ? (
+                          <div className="flex gap-2">
+                            <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
+                              修改
+                            </button>
+                            <button className={editButtonClass} type="button" onClick={() => void onCheckout(row)}>
+                              退房
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        ),
                     },
                   ]}
                 />
@@ -778,11 +832,14 @@ export function AllocationPage() {
                     { header: "状态", cell: () => "已退宿" },
                     {
                       header: "操作",
-                      cell: (row) => (
-                        <button className={deleteButtonClass} type="button" onClick={() => void onDeletePrevious(row)}>
-                          删除
-                        </button>
-                      ),
+                      cell: (row) =>
+                        canEdit ? (
+                          <button className={deleteButtonClass} type="button" onClick={() => void onDeletePrevious(row)}>
+                            删除
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        ),
                     },
                   ]}
                 />

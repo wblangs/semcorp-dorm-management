@@ -163,7 +163,7 @@ export type User = {
   id: number;
   username: string;
   display_name: string | null;
-  role: "admin" | "user";
+  role: "admin" | "user" | "viewer";
   status: "active" | "disabled";
   last_login_at: string | null;
   created_at: string | null;

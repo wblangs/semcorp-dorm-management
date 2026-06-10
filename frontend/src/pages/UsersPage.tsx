@@ -16,7 +16,7 @@ type UserFormState = {
   username: string;
   password: string;
   display_name: string;
-  role: "admin" | "user";
+  role: "admin" | "user" | "viewer";
   status: "active" | "disabled";
 };
 
@@ -141,6 +141,7 @@ export function UsersPage() {
             >
               <option value="admin">admin</option>
               <option value="user">user</option>
+              <option value="viewer">viewer（只读）</option>
             </select>
           </FormField>
           <FormField label="状态" required>

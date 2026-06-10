@@ -98,3 +98,10 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="无权限执行该操作")
     return current_user
+
+
+def require_editor(current_user: User = Depends(get_current_user)) -> User:
+    """Allow admin and user roles to mutate data; block read-only (viewer) accounts."""
+    if current_user.role not in ("admin", "user"):
+        raise HTTPException(status_code=403, detail="只读账号无权修改数据")
+    return current_user

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { api } from "../api";
-import { DataTable } from "../components/DataTable";
+import { useAuth } from "../auth/AuthContext";
 import { editButtonClass, fieldControlClass, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Room } from "../types";
@@ -29,6 +29,7 @@ type DormGroup = {
 };
 
 export function RoomAssetsPage() {
+  const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
@@ -132,6 +133,97 @@ export function RoomAssetsPage() {
     }
   };
 
+  // Cell renderers for the transposed matrix (asset rows × room columns).
+  const bedSizeCell = (room: Room) =>
+    editingRoomId === room.id ? (
+      <select
+        className={fieldControlClass}
+        value={draft.bed_size}
+        onChange={(e) => setDraft((d) => ({ ...d, bed_size: e.target.value }))}
+      >
+        <option value="">未设置</option>
+        {dictionaries.bedSizes.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <span>{room.bed_size ?? "-"}</span>
+    );
+
+  const lightCell = (room: Room) =>
+    editingRoomId === room.id ? (
+      <select
+        className={fieldControlClass}
+        value={draft.light_type}
+        onChange={(e) => setDraft((d) => ({ ...d, light_type: e.target.value }))}
+      >
+        <option value="">未设置</option>
+        {dictionaries.lightTypes.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <span>{room.light_type ?? "-"}</span>
+    );
+
+  const nightstandCell = (room: Room) =>
+    editingRoomId === room.id ? (
+      <input
+        className={fieldControlClass}
+        type="number"
+        min={0}
+        value={draft.nightstand_count}
+        onChange={(e) => setDraft((d) => ({ ...d, nightstand_count: Number(e.target.value) }))}
+      />
+    ) : (
+      <span>{room.nightstand_count ?? 0}</span>
+    );
+
+  const trashCell = (room: Room) =>
+    editingRoomId === room.id ? (
+      <input
+        className={fieldControlClass}
+        type="number"
+        min={0}
+        value={draft.trash_can_count}
+        onChange={(e) => setDraft((d) => ({ ...d, trash_can_count: Number(e.target.value) }))}
+      />
+    ) : (
+      <span>{room.trash_can_count ?? 0}</span>
+    );
+
+  const actionCell = (room: Room) =>
+    editingRoomId === room.id ? (
+      <div className="flex gap-2">
+        <button className={primaryButtonClass} type="button" disabled={saving} onClick={() => void saveEdit(room)}>
+          {saving ? "保存中..." : "保存"}
+        </button>
+        <button className={secondaryButtonClass} type="button" onClick={cancelEdit}>
+          取消
+        </button>
+      </div>
+    ) : canEdit ? (
+      <button className={editButtonClass} type="button" onClick={() => startEdit(room)}>
+        修改
+      </button>
+    ) : (
+      <span className="text-slate-400">-</span>
+    );
+
+  const assetRows: { label: string; render: (room: Room) => ReactNode }[] = [
+    { label: "类型", render: (room) => room.room_type },
+    { label: "床位", render: (room) => room.bed_count },
+    { label: "床型", render: bedSizeCell },
+    { label: "灯具", render: lightCell },
+    { label: "床头柜", render: nightstandCell },
+    { label: "垃圾桶", render: trashCell },
+    { label: "操作", render: actionCell },
+  ];
+
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">房间资产管理</h2>
@@ -173,109 +265,40 @@ export function RoomAssetsPage() {
                 </button>
 
                 {expandedDormIds.has(group.dorm.id) ? (
-                  <DataTable
-                    rows={group.rooms}
-                    rowKey={(row) => row.id}
-                    emptyText="该宿舍暂无房间"
-                    columns={[
-                      { header: "房间", cell: (row) => row.room_name },
-                      { header: "类型", cell: (row) => row.room_type },
-                      { header: "床位", cell: (row) => row.bed_count },
-                      {
-                        header: "床型",
-                        cell: (row) =>
-                          editingRoomId === row.id ? (
-                            <select
-                              className={fieldControlClass}
-                              value={draft.bed_size}
-                              onChange={(e) => setDraft((d) => ({ ...d, bed_size: e.target.value }))}
-                            >
-                              <option value="">未设置</option>
-                              {dictionaries.bedSizes.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
+                  group.rooms.length === 0 ? (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                      该宿舍暂无房间
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                      <table className="min-w-full text-left text-sm">
+                        <thead className="bg-slate-100 text-slate-700">
+                          <tr>
+                            <th className="sticky left-0 z-10 bg-slate-100 px-4 py-3 font-semibold">房间</th>
+                            {group.rooms.map((room) => (
+                              <th key={room.id} className="whitespace-nowrap px-4 py-3 font-semibold">
+                                {room.room_name}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assetRows.map((assetRow) => (
+                            <tr key={assetRow.label} className="border-t border-slate-100">
+                              <th className="sticky left-0 z-10 bg-white px-4 py-3 text-left font-medium text-slate-600">
+                                {assetRow.label}
+                              </th>
+                              {group.rooms.map((room) => (
+                                <td key={room.id} className="px-4 py-3 text-slate-700">
+                                  {assetRow.render(room)}
+                                </td>
                               ))}
-                            </select>
-                          ) : (
-                            row.bed_size ?? "-"
-                          ),
-                      },
-                      {
-                        header: "灯具",
-                        cell: (row) =>
-                          editingRoomId === row.id ? (
-                            <select
-                              className={fieldControlClass}
-                              value={draft.light_type}
-                              onChange={(e) => setDraft((d) => ({ ...d, light_type: e.target.value }))}
-                            >
-                              <option value="">未设置</option>
-                              {dictionaries.lightTypes.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            row.light_type ?? "-"
-                          ),
-                      },
-                      {
-                        header: "床头柜",
-                        cell: (row) =>
-                          editingRoomId === row.id ? (
-                            <input
-                              className={fieldControlClass}
-                              type="number"
-                              min={0}
-                              value={draft.nightstand_count}
-                              onChange={(e) => setDraft((d) => ({ ...d, nightstand_count: Number(e.target.value) }))}
-                            />
-                          ) : (
-                            (row.nightstand_count ?? 0)
-                          ),
-                      },
-                      {
-                        header: "垃圾桶",
-                        cell: (row) =>
-                          editingRoomId === row.id ? (
-                            <input
-                              className={fieldControlClass}
-                              type="number"
-                              min={0}
-                              value={draft.trash_can_count}
-                              onChange={(e) => setDraft((d) => ({ ...d, trash_can_count: Number(e.target.value) }))}
-                            />
-                          ) : (
-                            (row.trash_can_count ?? 0)
-                          ),
-                      },
-                      {
-                        header: "操作",
-                        cell: (row) =>
-                          editingRoomId === row.id ? (
-                            <div className="flex gap-2">
-                              <button
-                                className={primaryButtonClass}
-                                type="button"
-                                disabled={saving}
-                                onClick={() => void saveEdit(row)}
-                              >
-                                {saving ? "保存中..." : "保存"}
-                              </button>
-                              <button className={secondaryButtonClass} type="button" onClick={cancelEdit}>
-                                取消
-                              </button>
-                            </div>
-                          ) : (
-                            <button className={editButtonClass} type="button" onClick={() => startEdit(row)}>
-                              修改
-                            </button>
-                          ),
-                      },
-                    ]}
-                  />
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
                 ) : null}
               </section>
             ))

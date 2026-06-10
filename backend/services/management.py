@@ -167,7 +167,7 @@ def serialize_user(user: User) -> dict:
 
 
 def _ensure_role_and_status(role: str, status: str) -> None:
-    if role not in {"admin", "user"}:
+    if role not in {"admin", "user", "viewer"}:
         raise HTTPException(status_code=400, detail="角色不支持")
     if status not in {"active", "disabled"}:
         raise HTTPException(status_code=400, detail="状态不支持")

@@ -8,7 +8,7 @@ import { useDictionaries } from "../hooks/useDictionaries";
 import type { StayRecord } from "../types";
 
 export function StayPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<StayRecord[]>([]);
   const [error, setError] = useState("");
@@ -148,9 +148,11 @@ export function StayPage() {
       header: "操作",
       cell: (row: StayRecord) => (
         <div className="flex gap-2">
-          <button className={editButtonClass} type="button" onClick={() => editStay(row)}>
-            修改
-          </button>
+          {canEdit ? (
+            <button className={editButtonClass} type="button" onClick={() => editStay(row)}>
+              修改
+            </button>
+          ) : null}
           {isAdmin ? (
             <button
               className={deleteButtonClass}
@@ -170,6 +172,7 @@ export function StayPage() {
               删除
             </button>
           ) : null}
+          {!canEdit && !isAdmin ? <span className="text-slate-400">-</span> : null}
         </div>
       ),
     },
@@ -179,6 +182,7 @@ export function StayPage() {
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">停留风险</h2>
 
+      {canEdit ? (
       <form
         onSubmit={onSubmit}
         className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-3"
@@ -257,6 +261,7 @@ export function StayPage() {
           保存风险处理信息
         </button>
       </form>
+      ) : null}
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
 

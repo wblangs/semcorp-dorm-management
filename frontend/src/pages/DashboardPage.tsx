@@ -8,6 +8,7 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string>("");
   const [showRenewalDorms, setShowRenewalDorms] = useState(false);
+  const [showRiskBreakdown, setShowRiskBreakdown] = useState(false);
 
   useEffect(() => {
     api
@@ -24,24 +25,13 @@ export function DashboardPage() {
     return <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>;
   }
 
-  const cards = [
+  const housingCards = [
     { label: "宿舍总数", value: data.dormTotal },
     { label: "房间总数", value: data.roomTotal },
     { label: "总床位数", value: data.bedTotal },
     { label: "当前入住人数", value: data.currentOccupancy },
     { label: "空床数", value: data.emptyBeds },
     { label: "入住率", value: `${data.occupancyRate}%` },
-    { label: "风险人数(<=60天)", value: data.riskPeople, to: "/stay" },
-    { label: "Red 风险人数", value: data.riskRed, to: "/stay" },
-    { label: "Yellow 风险人数", value: data.riskYellow, to: "/stay" },
-    { label: "Green 正常人数", value: data.riskGreen, to: "/stay" },
-    { label: "Unknown 未维护人数", value: data.riskUnknown, to: "/stay" },
-    { label: "可用车辆数", value: data.availableVehicles },
-    { label: "维修车辆数", value: data.maintenanceVehicles },
-    { label: "停用车辆数", value: data.disabledVehicles },
-    { label: "30天内保险到期车辆数", value: data.vehicleInsuranceExpiring30 },
-    { label: "30天内年检到期车辆数", value: data.vehicleInspectionExpiring30 },
-    { label: "30天内保养到期车辆数", value: data.vehicleMaintenanceDue30 },
   ];
 
   return (
@@ -62,28 +52,51 @@ export function DashboardPage() {
           </p>
         </button>
 
-        {cards.map((card) => {
-          const content = (
-            <>
-              <p className="text-sm text-slate-500">{card.label}</p>
-              <p className="mt-1 text-2xl font-bold">{card.value}</p>
-            </>
-          );
+        {housingCards.map((card) => (
+          <article key={card.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">{card.label}</p>
+            <p className="mt-1 text-2xl font-bold">{card.value}</p>
+          </article>
+        ))}
 
-          return card.to ? (
+        <Link
+          to="/stay"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100"
+        >
+          <p className="text-sm text-slate-500">Green 正常人数</p>
+          <p className="mt-1 text-2xl font-bold">{data.riskGreen}</p>
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setShowRiskBreakdown((value) => !value)}
+          className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          <p className="text-sm text-slate-500">风险人数(&lt;=60天)</p>
+          <p className="mt-1 text-2xl font-bold">{data.riskPeople}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {showRiskBreakdown ? "点击收起明细" : "点击查看明细"}
+          </p>
+        </button>
+
+        {showRiskBreakdown ? (
+          <>
             <Link
-              key={card.label}
-              to={card.to}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              to="/stay"
+              className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm transition hover:border-amber-300 hover:bg-amber-100"
             >
-              {content}
+              <p className="text-sm text-slate-500">Yellow 风险人数</p>
+              <p className="mt-1 text-2xl font-bold">{data.riskYellow}</p>
             </Link>
-          ) : (
-            <article key={card.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              {content}
-            </article>
-          );
-        })}
+            <Link
+              to="/stay"
+              className="rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm transition hover:border-red-300 hover:bg-red-100"
+            >
+              <p className="text-sm text-slate-500">Red 风险人数</p>
+              <p className="mt-1 text-2xl font-bold">{data.riskRed}</p>
+            </Link>
+          </>
+        ) : null}
       </div>
 
       {showRenewalDorms ? (
@@ -128,6 +141,7 @@ export function DashboardPage() {
         </article>
       ) : null}
 
+      {showRiskBreakdown ? (
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-semibold text-slate-700">未来30天最大停留到期</h3>
@@ -166,6 +180,7 @@ export function DashboardPage() {
           </ul>
         </article>
       </div>
+      ) : null}
     </section>
   );
 }
