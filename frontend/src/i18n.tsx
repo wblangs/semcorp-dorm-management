@@ -12,7 +12,7 @@ type LanguageContextValue = {
 const LANGUAGE_STORAGE_KEY = "semcorp-language";
 
 const translations: Record<string, string> = {
-  "宿舍与通勤管理系统": "Dorm & Commute Management",
+  "宿舍管理系统": "Dorm Management System",
   "内部试用版登录": "Internal Trial Login",
   "用户名": "Username",
   "密码": "Password",

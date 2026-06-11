@@ -47,7 +47,7 @@ export function LoginPage() {
           <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold text-white shadow-sm">
             宿
           </span>
-          <h1 className="text-xl font-semibold tracking-tight">宿舍与通勤管理系统</h1>
+          <h1 className="text-xl font-semibold tracking-tight">宿舍管理系统</h1>
           <p className="mt-1 text-sm text-slate-500">内部试用版登录</p>
         </div>
 

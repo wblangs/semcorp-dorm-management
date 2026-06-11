@@ -37,7 +37,7 @@ export function AdminLayout() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white shadow-sm">
               宿
             </span>
-            <h1 className="text-base font-semibold tracking-tight text-slate-900">宿舍与通勤管理系统</h1>
+            <h1 className="text-base font-semibold tracking-tight text-slate-900">宿舍管理系统</h1>
           </div>
 
           <nav className="flex flex-1 flex-wrap items-center gap-1">
