@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
+import { buildRoomShades } from "../dormPalette";
 import type { Dorm, Room } from "../types";
 
 type RoomFormState = {
@@ -106,13 +107,8 @@ export function RoomsPage() {
   };
 
   const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
-  // Light tint per dorm, so rooms of the same dorm read as a group.
-  const DORM_COLORS = ["FEE2E2", "DBEAFE", "DCFCE7", "FFEDD5", "EDE9FE", "CCFBF1", "FEF9C3", "FCE7F3"];
-  const dormColor = useMemo(() => {
-    const map = new Map<number, string>();
-    dorms.forEach((dorm, index) => map.set(dorm.id, DORM_COLORS[index % DORM_COLORS.length]));
-    return map;
-  }, [dorms]);
+  // Shared dorm colour system (same as the Assets / Summary tables).
+  const roomShades = useMemo(() => buildRoomShades(dorms, rows), [dorms, rows]);
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     const matched = keyword
@@ -219,7 +215,7 @@ export function RoomsPage() {
           rows={filteredRows}
           rowKey={(row) => row.id}
           emptyText="没有匹配记录"
-          rowStyle={(row) => ({ backgroundColor: `#${dormColor.get(row.dorm_id) ?? "FFFFFF"}` })}
+          rowStyle={(row) => ({ backgroundColor: `#${roomShades.get(row.id) ?? "FFFFFF"}` })}
           columns={[
             { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
             { header: "房间名", cell: (row) => row.room_name },

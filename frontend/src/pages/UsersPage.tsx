@@ -102,7 +102,7 @@ export function UsersPage() {
   return (
     <section className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">用户管理</h2>
+        <h2 className="text-xl font-semibold">用户管理</h2>
         <p className="mt-1 text-sm text-slate-500">仅 admin 可维护系统账号、角色和状态。</p>
       </div>
 

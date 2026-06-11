@@ -2,22 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
 import { fieldControlClass, primaryButtonClass } from "../components/FormField";
+import { dormPair, REPORT_HEADER_FILL } from "../dormPalette";
 import type { Allocation, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
-
-// Pastel band colors (hex, no leading #). One per dorm, cycled in dorm order.
-const DORM_PALETTE = [
-  "FFF2CC", // light yellow
-  "DDEBF7", // light blue
-  "E2EFDA", // light green
-  "FCE4D6", // light orange
-  "EDEDED", // light gray
-  "FFE699", // gold
-  "EAD1DC", // light purple
-  "D9E1F2", // light steel blue
-];
-
-const HEADER_FILL = "4472C4";
 
 type SummaryRow = {
   seq: number;
@@ -30,6 +17,7 @@ type SummaryRow = {
   moveInDate: string;
   note: string;
   isEmpty: boolean;
+  shade: string;
 };
 
 const COLUMNS: { key: keyof SummaryRow; header: string; width: number; align: "center" | "left" }[] = [
@@ -79,12 +67,6 @@ export function SummaryPage() {
     void load();
   }, []);
 
-  const dormColor = useMemo(() => {
-    const map = new Map<number, string>();
-    dorms.forEach((dorm, index) => map.set(dorm.id, DORM_PALETTE[index % DORM_PALETTE.length]));
-    return map;
-  }, [dorms]);
-
   const rows = useMemo<SummaryRow[]>(() => {
     const peopleMap = new Map(people.map((person) => [person.id, person]));
     const activeByRoom = new Map<number, Allocation[]>();
@@ -96,11 +78,13 @@ export function SummaryPage() {
 
     const result: SummaryRow[] = [];
     let seq = 0;
-    dorms.forEach((dorm) => {
+    dorms.forEach((dorm, dormIndex) => {
+      const pair = dormPair(dormIndex);
       const dormRooms = rooms
         .filter((room) => room.dorm_id === dorm.id)
         .sort((a, b) => a.room_name.localeCompare(b.room_name, "zh-Hans-CN"));
-      dormRooms.forEach((room) => {
+      dormRooms.forEach((room, roomIndex) => {
+        const shade = pair[roomIndex % 2];
         const occupants = activeByRoom.get(room.id) ?? [];
         occupants.forEach((allocation) => {
           const person = peopleMap.get(allocation.person_id);
@@ -118,6 +102,7 @@ export function SummaryPage() {
             moveInDate: allocation.check_in_date ?? "",
             note: allocation.note ?? "",
             isEmpty: false,
+            shade,
           });
         });
         const freeBeds = Math.max(room.bed_count - occupants.length, 0);
@@ -134,6 +119,7 @@ export function SummaryPage() {
             moveInDate: "",
             note: "空铺",
             isEmpty: true,
+            shade,
           });
         }
       });
@@ -171,7 +157,7 @@ export function SummaryPage() {
       const headerRow = sheet.addRow(COLUMNS.map((column) => column.header));
       headerRow.height = 22;
       headerRow.eachCell((cell) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${HEADER_FILL}` } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${REPORT_HEADER_FILL}` } };
         cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = border;
@@ -180,7 +166,7 @@ export function SummaryPage() {
       // Data rows
       filteredRows.forEach((row) => {
         const excelRow = sheet.addRow(COLUMNS.map((column) => row[column.key]));
-        const argb = `FF${dormColor.get(row.dormId) ?? "FFFFFF"}`;
+        const argb = `FF${row.shade}`;
         COLUMNS.forEach((column, index) => {
           const cell = excelRow.getCell(index + 1);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
@@ -234,9 +220,9 @@ export function SummaryPage() {
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead>
-                <tr style={{ backgroundColor: `#${HEADER_FILL}` }} className="text-white">
+                <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   {COLUMNS.map((column) => (
-                    <th key={column.key} className="border border-slate-300 px-3 py-2 font-semibold">
+                    <th key={column.key} className="border border-slate-200 px-3 py-2 font-semibold">
                       {column.header}
                     </th>
                   ))}
@@ -251,12 +237,12 @@ export function SummaryPage() {
                   </tr>
                 ) : null}
                 {filteredRows.map((row) => (
-                  <tr key={row.seq} style={{ backgroundColor: `#${dormColor.get(row.dormId) ?? "FFFFFF"}` }}>
+                  <tr key={row.seq} style={{ backgroundColor: `#${row.shade}` }}>
                     {COLUMNS.map((column) => (
                       <td
                         key={column.key}
-                        className={`border border-slate-300 px-3 py-2 ${column.align === "center" ? "text-center" : "text-left"} ${
-                          row.isEmpty && column.key === "note" ? "font-bold text-red-600" : "text-slate-800"
+                        className={`border border-white px-3 py-2 ${column.align === "center" ? "text-center" : "text-left"} ${
+                          row.isEmpty && column.key === "note" ? "font-bold text-rose-600" : "text-slate-800"
                         }`}
                       >
                         {row[column.key]}

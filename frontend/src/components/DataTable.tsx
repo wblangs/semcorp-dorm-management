@@ -15,27 +15,27 @@ type DataTableProps<T> = {
 
 export function DataTable<T>({ columns, rows, rowKey, emptyText = "暂无数据", rowStyle }: DataTableProps<T>) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-left text-sm">
-        <thead className="bg-slate-100 text-slate-700">
+        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
             {columns.map((column) => (
-              <th key={column.header} className="px-4 py-3 font-semibold">
+              <th key={column.header} className="whitespace-nowrap px-4 py-3 font-semibold">
                 {column.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100">
           {rows.length === 0 ? (
             <tr>
-              <td className="px-4 py-6 text-center text-slate-500" colSpan={columns.length}>
+              <td className="px-4 py-8 text-center text-slate-400" colSpan={columns.length}>
                 {emptyText}
               </td>
             </tr>
           ) : null}
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="border-t border-slate-100 hover:bg-slate-50" style={rowStyle?.(row)}>
+            <tr key={rowKey(row)} className="transition hover:bg-slate-50/70" style={rowStyle?.(row)}>
               {columns.map((column) => (
                 <td key={column.header} className="px-4 py-3 text-slate-700">
                   {column.cell(row)}

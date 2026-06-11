@@ -31,44 +31,53 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <h1 className="text-lg font-semibold">宿舍与通勤管理系统</h1>
-          <nav className="flex flex-wrap items-center gap-2">
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/85 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white shadow-sm">
+              宿
+            </span>
+            <h1 className="text-base font-semibold tracking-tight text-slate-900">宿舍与通勤管理系统</h1>
+          </div>
+
+          <nav className="flex flex-1 flex-wrap items-center gap-1">
             {navItems.filter((item) => !item.adminOnly || isAdmin).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === "/"}
                 className={({ isActive }) =>
-                  `rounded-lg px-3 py-2 text-sm font-medium transition ${
-                    isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-200"
+                  `rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    isActive ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`
                 }
               >
                 {item.label}
               </NavLink>
             ))}
-            <span className="ml-2 text-sm text-slate-600">{user?.display_name || user?.username}</span>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm text-slate-500 sm:inline">{user?.display_name || user?.username}</span>
             <button
               type="button"
               onClick={toggleLanguage}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               {language === "zh" ? "English" : "中文"}
             </button>
             <button
               type="button"
               onClick={handleLogout}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
             >
               退出登录
             </button>
-          </nav>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-6">
+      <main className="mx-auto max-w-7xl px-6 py-8">
         <Outlet />
       </main>
     </div>

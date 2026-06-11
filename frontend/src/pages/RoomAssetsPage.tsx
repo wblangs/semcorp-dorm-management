@@ -4,23 +4,10 @@ import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { deleteButtonClass, editButtonClass, fieldControlClass, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
+import { DORM_PALETTE, REPORT_HEADER_FILL } from "../dormPalette";
 import type { Dorm, Room, RoomItem } from "../types";
 import { todayISO } from "../utils/date";
 
-// One colour family per dorm: [light shade, deep shade]. Rooms within a dorm
-// alternate between the two shades so adjacent rooms stay distinguishable.
-const DORM_PALETTE: [string, string][] = [
-  ["FEF2F2", "FEE2E2"], // red
-  ["EFF6FF", "DBEAFE"], // blue
-  ["F0FDF4", "DCFCE7"], // green
-  ["FFF7ED", "FFEDD5"], // orange
-  ["F5F3FF", "EDE9FE"], // purple
-  ["F0FDFA", "CCFBF1"], // teal
-  ["FEFCE8", "FEF9C3"], // yellow
-  ["FDF2F8", "FCE7F3"], // pink
-];
-
-const HEADER_FILL = "4472C4";
 const COLUMNS = ["宿舍", "房间", "物品", "型号", "数量"];
 
 type Draft = { name: string; item_type: string; count: number };
@@ -191,7 +178,7 @@ export function RoomAssetsPage() {
       const headerRow = sheet.addRow(COLUMNS);
       headerRow.height = 22;
       headerRow.eachCell((cell) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${HEADER_FILL}` } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${REPORT_HEADER_FILL}` } };
         cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = border;
@@ -328,13 +315,13 @@ export function RoomAssetsPage() {
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead>
-                <tr style={{ backgroundColor: `#${HEADER_FILL}` }} className="text-white">
+                <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   {COLUMNS.map((label) => (
-                    <th key={label} className="border border-white px-4 py-2 font-semibold">
+                    <th key={label} className="border border-slate-200 px-4 py-2 font-semibold">
                       {label}
                     </th>
                   ))}
-                  {canEdit ? <th className="border border-white px-4 py-2 font-semibold">操作</th> : null}
+                  {canEdit ? <th className="border border-slate-200 px-4 py-2 font-semibold">操作</th> : null}
                 </tr>
               </thead>
               <tbody>
