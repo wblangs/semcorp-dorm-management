@@ -5,19 +5,17 @@ import { fieldControlClass, primaryButtonClass } from "../components/FormField";
 import type { Allocation, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
 
-// Pastel band colors (hex, no leading #). One per dorm, cycled in dorm order.
+// CHANGE: Unified soft color system, same style as RoomsPage and RoomAssetsPage.
 const DORM_PALETTE = [
-  "FFF2CC", // light yellow
-  "DDEBF7", // light blue
-  "E2EFDA", // light green
-  "FCE4D6", // light orange
-  "EDEDED", // light gray
-  "FFE699", // gold
-  "EAD1DC", // light purple
-  "D9E1F2", // light steel blue
+  { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", excel: "EFF6FF" },
+  { bg: "#ecfdf5", text: "#047857", border: "#bbf7d0", excel: "ECFDF5" },
+  { bg: "#fffbeb", text: "#b45309", border: "#fde68a", excel: "FFFBEB" },
+  { bg: "#f5f3ff", text: "#6d28d9", border: "#ddd6fe", excel: "F5F3FF" },
+  { bg: "#fff1f2", text: "#be123c", border: "#fecdd3", excel: "FFF1F2" },
+  { bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4", excel: "F0FDFA" },
 ];
 
-const HEADER_FILL = "4472C4";
+const HEADER_FILL = "0F172A"; // CHANGE: Cleaner dark header color.
 
 type SummaryRow = {
   seq: number;
@@ -79,8 +77,9 @@ export function SummaryPage() {
     void load();
   }, []);
 
+  // CHANGE: Create color map for each dorm using unified palette.
   const dormColor = useMemo(() => {
-    const map = new Map<number, string>();
+    const map = new Map<number, (typeof DORM_PALETTE)[number]>();
     dorms.forEach((dorm, index) => map.set(dorm.id, DORM_PALETTE[index % DORM_PALETTE.length]));
     return map;
   }, [dorms]);
@@ -180,7 +179,7 @@ export function SummaryPage() {
       // Data rows
       filteredRows.forEach((row) => {
         const excelRow = sheet.addRow(COLUMNS.map((column) => row[column.key]));
-        const argb = `FF${dormColor.get(row.dormId) ?? "FFFFFF"}`;
+        const argb = `FF${dormColor.get(row.dormId)?.excel ?? "FFFFFF"}`; // CHANGE
         COLUMNS.forEach((column, index) => {
           const cell = excelRow.getCell(index + 1);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
@@ -236,7 +235,7 @@ export function SummaryPage() {
               <thead>
                 <tr style={{ backgroundColor: `#${HEADER_FILL}` }} className="text-white">
                   {COLUMNS.map((column) => (
-                    <th key={column.key} className="border border-slate-300 px-3 py-2 font-semibold">
+                    <th key={column.key} className="border border-slate-700 px-3 py-2 font-semibold"> {/* CHANGE */}
                       {column.header}
                     </th>
                   ))}
@@ -250,20 +249,43 @@ export function SummaryPage() {
                     </td>
                   </tr>
                 ) : null}
-                {filteredRows.map((row) => (
-                  <tr key={row.seq} style={{ backgroundColor: `#${dormColor.get(row.dormId) ?? "FFFFFF"}` }}>
-                    {COLUMNS.map((column) => (
-                      <td
-                        key={column.key}
-                        className={`border border-slate-300 px-3 py-2 ${column.align === "center" ? "text-center" : "text-left"} ${
-                          row.isEmpty && column.key === "note" ? "font-bold text-red-600" : "text-slate-800"
-                        }`}
-                      >
-                        {row[column.key]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {filteredRows.map((row) => {
+                  const color = dormColor.get(row.dormId); // CHANGE
+
+                  return (
+                    <tr
+                      key={row.seq}
+                      style={{
+                        backgroundColor: "#ffffff", // CHANGE
+                        borderLeft: `5px solid ${color?.border ?? "#e5e7eb"}`, // CHANGE
+                      }}
+                    >
+                      {COLUMNS.map((column) => (
+                        <td
+                          key={column.key}
+                          className={`border border-slate-100 px-3 py-2 ${column.align === "center" ? "text-center" : "text-left"} ${
+                            row.isEmpty && column.key === "note" ? "font-bold text-red-600" : "text-slate-800"
+                          }`} // CHANGE
+                        >
+                          {column.key === "dormName" ? ( // CHANGE
+                            <span
+                              className="inline-flex rounded-full border px-3 py-1 text-sm font-semibold"
+                              style={{
+                                backgroundColor: color?.bg ?? "#f8fafc",
+                                color: color?.text ?? "#334155",
+                                borderColor: color?.border ?? "#e2e8f0",
+                              }}
+                            >
+                              {row[column.key]}
+                            </span>
+                          ) : (
+                            row[column.key]
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

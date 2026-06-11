@@ -106,13 +106,27 @@ export function RoomsPage() {
   };
 
   const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
-  // Light tint per dorm, so rooms of the same dorm read as a group.
-  const DORM_COLORS = ["FEE2E2", "DBEAFE", "DCFCE7", "FFEDD5", "EDE9FE", "CCFBF1", "FEF9C3", "FCE7F3"];
+
+  // CHANGE: Unified soft color system for dorm badges.
+  // CHANGE: Same dorm will always use the same color on this page.
+  const DORM_COLORS = [
+    { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe" },
+    { bg: "#ecfdf5", text: "#047857", border: "#bbf7d0" },
+    { bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+    { bg: "#f5f3ff", text: "#6d28d9", border: "#ddd6fe" },
+    { bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
+    { bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
+  ];
+
+  // CHANGE: Create color map for each dorm.
   const dormColor = useMemo(() => {
-    const map = new Map<number, string>();
-    dorms.forEach((dorm, index) => map.set(dorm.id, DORM_COLORS[index % DORM_COLORS.length]));
+    const map = new Map<number, (typeof DORM_COLORS)[number]>();
+    dorms.forEach((dorm, index) => {
+      map.set(dorm.id, DORM_COLORS[index % DORM_COLORS.length]);
+    });
     return map;
   }, [dorms]);
+
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     const matched = keyword
@@ -219,14 +233,50 @@ export function RoomsPage() {
           rows={filteredRows}
           rowKey={(row) => row.id}
           emptyText="没有匹配记录"
-          rowStyle={(row) => ({ backgroundColor: `#${dormColor.get(row.dorm_id) ?? "FFFFFF"}` })}
+          // CHANGE: Keep table row background clean and only use left border to identify dorm.
+          rowStyle={(row) => ({
+            backgroundColor: "#ffffff",
+            borderLeft: `5px solid ${dormColor.get(row.dorm_id)?.border ?? "#e5e7eb"}`,
+          })}
           columns={[
-            { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
+            // CHANGE: Dorm is now displayed as a soft colored badge instead of coloring the whole row.
+            {
+              header: "宿舍",
+              cell: (row) => {
+                const color = dormColor.get(row.dorm_id);
+                return (
+                  <span
+                    className="inline-flex rounded-full border px-3 py-1 text-sm font-semibold"
+                    style={{
+                      backgroundColor: color?.bg ?? "#f8fafc",
+                      color: color?.text ?? "#334155",
+                      borderColor: color?.border ?? "#e2e8f0",
+                    }}
+                  >
+                    {dormMap.get(row.dorm_id) ?? "Unknown"}
+                  </span>
+                );
+              },
+            },
             { header: "房间名", cell: (row) => row.room_name },
             { header: "类型", cell: (row) => row.room_type },
             { header: "床位", cell: (row) => row.bed_count },
             { header: "性别限制", cell: (row) => row.gender_limit },
-            { header: "状态", cell: (row) => row.status },
+            // CHANGE: Status is now displayed as a badge.
+            {
+              header: "状态",
+              cell: (row) => (
+                <span
+                  className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
+                    row.status === "active"
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                      : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
+                  }`}
+                >
+                  {row.status}
+                </span>
+              ),
+            },
             {
               header: "操作",
               cell: (row) => (

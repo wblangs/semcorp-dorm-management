@@ -7,20 +7,17 @@ import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Room, RoomItem } from "../types";
 import { todayISO } from "../utils/date";
 
-// One colour family per dorm: [light shade, deep shade]. Rooms within a dorm
-// alternate between the two shades so adjacent rooms stay distinguishable.
-const DORM_PALETTE: [string, string][] = [
-  ["FEF2F2", "FEE2E2"], // red
-  ["EFF6FF", "DBEAFE"], // blue
-  ["F0FDF4", "DCFCE7"], // green
-  ["FFF7ED", "FFEDD5"], // orange
-  ["F5F3FF", "EDE9FE"], // purple
-  ["F0FDFA", "CCFBF1"], // teal
-  ["FEFCE8", "FEF9C3"], // yellow
-  ["FDF2F8", "FCE7F3"], // pink
+// CHANGE: Unified soft color system, same style as RoomsPage.
+const DORM_PALETTE = [
+  { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", soft: "#f8fafc" },
+  { bg: "#ecfdf5", text: "#047857", border: "#bbf7d0", soft: "#f8fafc" },
+  { bg: "#fffbeb", text: "#b45309", border: "#fde68a", soft: "#f8fafc" },
+  { bg: "#f5f3ff", text: "#6d28d9", border: "#ddd6fe", soft: "#f8fafc" },
+  { bg: "#fff1f2", text: "#be123c", border: "#fecdd3", soft: "#f8fafc" },
+  { bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4", soft: "#f8fafc" },
 ];
 
-const HEADER_FILL = "4472C4";
+const HEADER_FILL = "0F172A"; // CHANGE: match cleaner dark table header.
 const COLUMNS = ["宿舍", "房间", "物品", "型号", "数量"];
 
 type Draft = { name: string; item_type: string; count: number };
@@ -66,12 +63,12 @@ export function RoomAssetsPage() {
     return map;
   }, [items]);
 
-  // Combobox suggestions: dictionary names + any names/types already in use.
   const nameSuggestions = useMemo(() => {
     const set = new Set<string>(itemNameOptions.map((o) => o.value));
     items.forEach((it) => set.add(it.name));
     return Array.from(set);
   }, [itemNameOptions, items]);
+
   const typeSuggestions = useMemo(() => {
     const set = new Set<string>();
     items.forEach((it) => it.item_type && set.add(it.item_type));
@@ -83,7 +80,6 @@ export function RoomAssetsPage() {
     [rooms, addForm.dorm_id],
   );
 
-  // Keep the add-form dorm/room selections valid as data loads or dorm changes.
   useEffect(() => {
     setAddForm((f) => {
       const dormId = f.dorm_id && dorms.some((d) => String(d.id) === f.dorm_id) ? f.dorm_id : String(dorms[0]?.id ?? "");
@@ -117,6 +113,7 @@ export function RoomAssetsPage() {
     setEditingItemId(item.id);
     setEditDraft({ name: item.name, item_type: item.item_type ?? "", count: item.count });
   };
+
   const cancelEdit = () => setEditingItemId(null);
 
   const saveEdit = async (item: RoomItem) => {
@@ -198,8 +195,7 @@ export function RoomAssetsPage() {
       });
 
       groups.forEach((group) => {
-        group.rooms.forEach((room, roomIdx) => {
-          const shade = roomIdx % 2 === 0 ? group.palette[0] : group.palette[1];
+        group.rooms.forEach((room) => {
           const roomItems = itemsByRoom.get(room.id) ?? [];
           const rowsForRoom = roomItems.length > 0 ? roomItems : [null];
           rowsForRoom.forEach((item) => {
@@ -211,7 +207,7 @@ export function RoomAssetsPage() {
               item ? item.count : 0,
             ]);
             row.eachCell((cell, col) => {
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${shade}` } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } }; // CHANGE
               cell.border = border;
               cell.alignment = { vertical: "middle", horizontal: col >= 3 ? "center" : "left" };
             });
@@ -229,10 +225,9 @@ export function RoomAssetsPage() {
     }
   };
 
-  const td = "border border-white px-4 py-2 align-top text-slate-800";
+  const td = "border border-slate-100 px-4 py-2 align-top text-slate-800"; // CHANGE
   const colCount = canEdit ? COLUMNS.length + 1 : COLUMNS.length;
 
-  // Build the option list for a name <select>, ensuring the current value is present.
   return (
     <section className="space-y-4">
       <datalist id="asset-name-list">
@@ -252,7 +247,7 @@ export function RoomAssetsPage() {
           {exporting ? "导出中..." : "导出 Excel"}
         </button>
       </div>
-      <p className="text-sm text-slate-500">每个房间可自由增删资产物品；同一宿舍同色系，不同房间用深浅区分。</p>
+      <p className="text-sm text-slate-500">每个房间可自由增删资产物品；不同宿舍使用统一颜色标签区分。</p> {/* CHANGE */}
 
       {canEdit ? (
         <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-6">
@@ -330,11 +325,11 @@ export function RoomAssetsPage() {
               <thead>
                 <tr style={{ backgroundColor: `#${HEADER_FILL}` }} className="text-white">
                   {COLUMNS.map((label) => (
-                    <th key={label} className="border border-white px-4 py-2 font-semibold">
+                    <th key={label} className="border border-slate-700 px-4 py-2 font-semibold">
                       {label}
                     </th>
                   ))}
-                  {canEdit ? <th className="border border-white px-4 py-2 font-semibold">操作</th> : null}
+                  {canEdit ? <th className="border border-slate-700 px-4 py-2 font-semibold">操作</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -345,43 +340,59 @@ export function RoomAssetsPage() {
                     </td>
                   </tr>
                 ) : null}
-                {groups.flatMap((group, dormIdx) => {
-                  const pair = DORM_PALETTE[dormIdx % DORM_PALETTE.length];
+
+                {groups.flatMap((group) => {
+                  const color = group.palette; // CHANGE
                   let dormShown = false;
                   const trs: ReactNode[] = [];
-                  group.rooms.forEach((room, roomIdx) => {
-                    const shade = roomIdx % 2 === 0 ? pair[0] : pair[1];
+
+                  group.rooms.forEach((room) => {
                     const roomItems = itemsByRoom.get(room.id) ?? [];
                     type RowKind = { kind: "item"; item: RoomItem } | { kind: "empty" };
                     const rowKinds: RowKind[] = [
                       ...roomItems.map((item) => ({ kind: "item", item }) as RowKind),
                       ...(roomItems.length === 0 ? [{ kind: "empty" } as RowKind] : []),
                     ];
+
                     rowKinds.forEach((rk, rIdx) => {
                       const showDorm = !dormShown;
                       dormShown = true;
                       const showRoom = rIdx === 0;
-                      const rowKey =
-                        rk.kind === "item" ? `item-${rk.item.id}` : `${rk.kind}-${room.id}-${rIdx}`;
+                      const rowKey = rk.kind === "item" ? `item-${rk.item.id}` : `${rk.kind}-${room.id}-${rIdx}`;
                       const editing = rk.kind === "item" && editingItemId === rk.item.id;
+
                       trs.push(
-                        <tr key={rowKey}>
-                          <td style={{ backgroundColor: `#${pair[1]}` }} className={`${td} font-semibold text-slate-900`}>
-                            {showDorm ? group.dorm.name : ""}
+                        <tr key={rowKey} style={{ borderLeft: `5px solid ${color.border}` }}> {/* CHANGE */}
+                          <td style={{ backgroundColor: "#ffffff" }} className={`${td} font-semibold text-slate-900`}> {/* CHANGE */}
+                            {showDorm ? (
+                              <span
+                                className="inline-flex rounded-full border px-3 py-1 text-sm font-semibold" // CHANGE
+                                style={{
+                                  backgroundColor: color.bg,
+                                  color: color.text,
+                                  borderColor: color.border,
+                                }}
+                              >
+                                {group.dorm.name}
+                              </span>
+                            ) : (
+                              ""
+                            )}
                           </td>
-                          <td style={{ backgroundColor: `#${shade}` }} className={`${td} font-medium`}>
+
+                          <td style={{ backgroundColor: "#ffffff" }} className={`${td} font-medium`}> {/* CHANGE */}
                             {showRoom ? room.room_name : ""}
                           </td>
 
                           {rk.kind === "empty" ? (
                             <>
-                              <td style={{ backgroundColor: `#${shade}` }} className={`${td} text-slate-500`} colSpan={canEdit ? 4 : 3}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={`${td} text-slate-500`} colSpan={canEdit ? 4 : 3}> {/* CHANGE */}
                                 暂无资产
                               </td>
                             </>
                           ) : editing ? (
                             <>
-                              <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                 <input
                                   className={fieldControlClass}
                                   list="asset-name-list"
@@ -389,7 +400,7 @@ export function RoomAssetsPage() {
                                   onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
                                 />
                               </td>
-                              <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                 <input
                                   className={fieldControlClass}
                                   list="asset-type-list"
@@ -398,7 +409,7 @@ export function RoomAssetsPage() {
                                   onChange={(e) => setEditDraft((d) => ({ ...d, item_type: e.target.value }))}
                                 />
                               </td>
-                              <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                 <input
                                   className={fieldControlClass}
                                   type="number"
@@ -407,7 +418,7 @@ export function RoomAssetsPage() {
                                   onChange={(e) => setEditDraft((d) => ({ ...d, count: Number(e.target.value) }))}
                                 />
                               </td>
-                              <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                 <div className="flex gap-2">
                                   <button className={primaryButtonClass} type="button" disabled={busy} onClick={() => void saveEdit(rk.item)}>
                                     {busy ? "保存中..." : "保存"}
@@ -420,17 +431,17 @@ export function RoomAssetsPage() {
                             </>
                           ) : (
                             <>
-                              <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                 {rk.item.name}
                               </td>
-                              <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                 {rk.item.item_type ?? "-"}
                               </td>
-                              <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                              <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                 {rk.item.count}
                               </td>
                               {canEdit ? (
-                                <td style={{ backgroundColor: `#${shade}` }} className={td}>
+                                <td style={{ backgroundColor: "#ffffff" }} className={td}> {/* CHANGE */}
                                   <div className="flex gap-2">
                                     <button className={editButtonClass} type="button" onClick={() => startEdit(rk.item)}>
                                       修改
@@ -447,6 +458,7 @@ export function RoomAssetsPage() {
                       );
                     });
                   });
+
                   return trs;
                 })}
               </tbody>
