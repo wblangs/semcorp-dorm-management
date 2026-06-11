@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api";
 import { fieldControlClass, primaryButtonClass } from "../components/FormField";
-import { dormPair, REPORT_HEADER_FILL } from "../dormPalette";
+import { dormColorMap, REPORT_HEADER_FILL } from "../dormPalette";
 import type { Allocation, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
 
@@ -17,7 +17,6 @@ type SummaryRow = {
   moveInDate: string;
   note: string;
   isEmpty: boolean;
-  shade: string;
 };
 
 const COLUMNS: { key: keyof SummaryRow; header: string; width: number; align: "center" | "left" }[] = [
@@ -67,6 +66,8 @@ export function SummaryPage() {
     void load();
   }, []);
 
+  const dormColor = useMemo(() => dormColorMap(dorms), [dorms]);
+
   const rows = useMemo<SummaryRow[]>(() => {
     const peopleMap = new Map(people.map((person) => [person.id, person]));
     const activeByRoom = new Map<number, Allocation[]>();
@@ -78,13 +79,11 @@ export function SummaryPage() {
 
     const result: SummaryRow[] = [];
     let seq = 0;
-    dorms.forEach((dorm, dormIndex) => {
-      const pair = dormPair(dormIndex);
+    dorms.forEach((dorm) => {
       const dormRooms = rooms
         .filter((room) => room.dorm_id === dorm.id)
         .sort((a, b) => a.room_name.localeCompare(b.room_name, "zh-Hans-CN"));
-      dormRooms.forEach((room, roomIndex) => {
-        const shade = pair[roomIndex % 2];
+      dormRooms.forEach((room) => {
         const occupants = activeByRoom.get(room.id) ?? [];
         occupants.forEach((allocation) => {
           const person = peopleMap.get(allocation.person_id);
@@ -102,7 +101,7 @@ export function SummaryPage() {
             moveInDate: allocation.check_in_date ?? "",
             note: allocation.note ?? "",
             isEmpty: false,
-            shade,
+
           });
         });
         const freeBeds = Math.max(room.bed_count - occupants.length, 0);
@@ -119,7 +118,7 @@ export function SummaryPage() {
             moveInDate: "",
             note: "空铺",
             isEmpty: true,
-            shade,
+
           });
         }
       });
@@ -166,7 +165,7 @@ export function SummaryPage() {
       // Data rows
       filteredRows.forEach((row) => {
         const excelRow = sheet.addRow(COLUMNS.map((column) => row[column.key]));
-        const argb = `FF${row.shade}`;
+        const argb = `FF${dormColor.get(row.dormId)?.excel ?? "FFFFFF"}`; // CHANGE
         COLUMNS.forEach((column, index) => {
           const cell = excelRow.getCell(index + 1);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
@@ -222,7 +221,7 @@ export function SummaryPage() {
               <thead>
                 <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   {COLUMNS.map((column) => (
-                    <th key={column.key} className="border border-slate-200 px-3 py-2 font-semibold">
+                    <th key={column.key} className="px-3 py-2 font-semibold">
                       {column.header}
                     </th>
                   ))}
@@ -236,20 +235,43 @@ export function SummaryPage() {
                     </td>
                   </tr>
                 ) : null}
-                {filteredRows.map((row) => (
-                  <tr key={row.seq} style={{ backgroundColor: `#${row.shade}` }}>
-                    {COLUMNS.map((column) => (
-                      <td
-                        key={column.key}
-                        className={`border border-white px-3 py-2 ${column.align === "center" ? "text-center" : "text-left"} ${
-                          row.isEmpty && column.key === "note" ? "font-bold text-rose-600" : "text-slate-800"
-                        }`}
-                      >
-                        {row[column.key]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {filteredRows.map((row) => {
+                  const color = dormColor.get(row.dormId); // CHANGE
+
+                  return (
+                    <tr
+                      key={row.seq}
+                      style={{
+                        backgroundColor: "#ffffff",
+                        borderLeft: `5px solid ${color?.border ?? "#e5e7eb"}`,
+                      }}
+                    >
+                      {COLUMNS.map((column) => (
+                        <td
+                          key={column.key}
+                          className={`border border-slate-100 px-3 py-2 ${column.align === "center" ? "text-center" : "text-left"} ${
+                            row.isEmpty && column.key === "note" ? "font-bold text-red-600" : "text-slate-800"
+                          }`} // CHANGE
+                        >
+                          {column.key === "dormName" ? ( // CHANGE
+                            <span
+                              className="inline-flex rounded-full border px-3 py-1 text-sm font-semibold"
+                              style={{
+                                backgroundColor: color?.bg ?? "#f8fafc",
+                                color: color?.text ?? "#334155",
+                                borderColor: color?.border ?? "#e2e8f0",
+                              }}
+                            >
+                              {row[column.key]}
+                            </span>
+                          ) : (
+                            row[column.key]
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
