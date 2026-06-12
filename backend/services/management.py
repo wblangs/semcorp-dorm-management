@@ -388,23 +388,18 @@ def delete_dorm(dorm_id: int, db: Session, operator: str = "admin"):
     dorm = _get_active(db, Dorm, dorm_id)
     if not dorm:
         raise HTTPException(status_code=404, detail="Dorm not found")
-    active_count = db.scalar(
-        select(func.count(Allocation.id))
-        .join(Room, Allocation.room_id == Room.id)
-        .where(
-            Room.dorm_id == dorm_id,
-            Room.is_deleted.is_(False),
-            Allocation.status == "active",
-            Allocation.is_deleted.is_(False),
-        )
+    room_count = db.scalar(
+        select(func.count(Room.id)).where(Room.dorm_id == dorm_id, Room.is_deleted.is_(False))
     ) or 0
-    if active_count > 0:
-        raise HTTPException(status_code=400, detail="宿舍下属房间存在 active 入住记录，不能删除")
+    if room_count > 0:
+        raise HTTPException(status_code=400, detail="该宿舍下还有房间，请先删除所有房间后再删除宿舍")
+    vehicle_count = db.scalar(
+        select(func.count(Vehicle.id)).where(Vehicle.base_dorm_id == dorm_id, Vehicle.is_deleted.is_(False))
+    ) or 0
+    if vehicle_count > 0:
+        raise HTTPException(status_code=400, detail="该宿舍下还有车辆，请先调整车辆的常驻宿舍后再删除")
     before = _model_data(dorm)
     dorm.is_deleted = True
-    for room in dorm.rooms:
-        if not room.is_deleted:
-            room.is_deleted = True
     db.flush()
     _audit(db, entity_type="dorm", entity_id=dorm.id, action="delete", before_data=before, after_data=_model_data(dorm), operator=operator)
     db.commit()
@@ -462,9 +457,12 @@ def delete_room(room_id: int, db: Session, operator: str = "admin"):
         )
     ) or 0
     if active_count > 0:
-        raise HTTPException(status_code=400, detail="房间存在 active 入住记录，不能删除")
+        raise HTTPException(status_code=400, detail="该房间内有人居住，不能删除")
     before = _model_data(room)
     room.is_deleted = True
+    # Clean up the room's assets so they don't linger pointing at a deleted room.
+    for item in db.scalars(_active_stmt(RoomItem).where(RoomItem.room_id == room_id)).all():
+        item.is_deleted = True
     db.flush()
     _audit(db, entity_type="room", entity_id=room.id, action="delete", before_data=before, after_data=_model_data(room), operator=operator)
     db.commit()

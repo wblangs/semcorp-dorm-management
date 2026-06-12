@@ -7,6 +7,7 @@ import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, prima
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { Allocation, Dorm, Person, Room, StayRecord } from "../types";
 import { todayISO } from "../utils/date";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
@@ -45,7 +46,7 @@ const emptyStayForm: StayFormState = {
 };
 
 export function PeoplePage() {
-  const { isAdmin, canEdit } = useAuth();
+  const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Person[]>([]);
   const [stays, setStays] = useState<StayRecord[]>([]);
@@ -89,6 +90,7 @@ export function PeoplePage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (editingId && !confirm("确认保存修改？")) return;
     setError("");
     try {
       let personId = editingId;
@@ -360,7 +362,7 @@ export function PeoplePage() {
       </>
       ) : null}
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
@@ -451,12 +453,12 @@ export function PeoplePage() {
                       修改
                     </button>
                   ) : null}
-                  {isAdmin ? (
+                  {canEdit ? (
                     <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
                       删除
                     </button>
                   ) : null}
-                  {!canEdit && !isAdmin ? <span className="text-slate-400">-</span> : null}
+                  {!canEdit ? <span className="text-slate-400">-</span> : null}
                 </div>
               ),
             },

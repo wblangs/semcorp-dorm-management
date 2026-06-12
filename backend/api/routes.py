@@ -110,7 +110,7 @@ def update_dorm(
 
 
 @router.delete("/dorms/{dorm_id}")
-def delete_dorm(dorm_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_dorm(dorm_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.delete_dorm(dorm_id, db, operator=current_user.username)
 
 
@@ -167,7 +167,7 @@ def update_room(
 
 
 @router.delete("/rooms/{room_id}")
-def delete_room(room_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_room(room_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.delete_room(room_id, db, operator=current_user.username)
 
 
@@ -223,7 +223,7 @@ def update_person(
 
 
 @router.delete("/people/{person_id}")
-def delete_person(person_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_person(person_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.delete_person(person_id, db, operator=current_user.username)
 
 
@@ -266,7 +266,7 @@ def upsert_stay(payload: StayUpsert, db: Session = Depends(get_db), current_user
 
 
 @router.delete("/stays/{stay_id}")
-def delete_stay(stay_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_stay(stay_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.delete_stay(stay_id, db, operator=current_user.username)
 
 
@@ -375,7 +375,7 @@ def update_vehicle(
 
 
 @router.delete("/vehicles/{vehicle_id}")
-def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.delete_vehicle(vehicle_id, db, operator=current_user.username)
 
 

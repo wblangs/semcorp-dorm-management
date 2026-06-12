@@ -69,6 +69,7 @@ export function UsersPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (editingId && !confirm("确认保存修改？")) return;
     setError("");
     setMessage("");
     try {

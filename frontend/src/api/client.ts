@@ -34,14 +34,15 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   });
 
   if (!response.ok) {
-    let detail = "";
+    // Prefer the server's human-readable detail; fall back to the HTTP status.
+    let message = `${response.status} ${response.statusText}`;
     try {
       const data = (await response.json()) as { detail?: string };
-      detail = data.detail ? `: ${data.detail}` : "";
+      if (data.detail) message = data.detail;
     } catch {
-      detail = "";
+      // keep the status fallback
     }
-    throw new ApiError(`${response.status} ${response.statusText}${detail}`, response.status);
+    throw new ApiError(message, response.status);
   }
 
   if (response.status === 204) {

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { ApiError } from "../api/client";
 import type { SystemInfo } from "../types";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 export function SystemPage() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
@@ -32,7 +33,7 @@ export function SystemPage() {
         <p className="mt-1 text-sm text-slate-500">仅展示非敏感运行信息。</p>
       </div>
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
 
       {!info && !error ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>

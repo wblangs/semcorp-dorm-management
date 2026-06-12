@@ -8,6 +8,7 @@ import type { DictionaryKey, DictionaryOption } from "../dictionaries";
 import { api } from "../api";
 import { deleteButtonClass, fieldControlClass, FormField, primaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 const dictionaryKeys = Object.keys(dictionaryLabels) as DictionaryKey[];
 
@@ -80,7 +81,7 @@ export function DictionariesPage() {
           恢复默认
         </button>
       </div>
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {dictionaryKeys.map((key) => (
@@ -118,7 +119,10 @@ export function DictionariesPage() {
                   <button
                     className={`${deleteButtonClass} self-end rounded-lg px-3 py-2 text-sm`}
                     type="button"
-                    onClick={() => void updateDictionary(key, dictionaries[key].filter((_, itemIndex) => itemIndex !== index))}
+                    onClick={() => {
+                      if (!confirm("确认删除该字典项？")) return;
+                      void updateDictionary(key, dictionaries[key].filter((_, itemIndex) => itemIndex !== index));
+                    }}
                   >
                     删除
                   </button>

@@ -56,6 +56,8 @@ const translations: Record<string, string> = {
   "用户管理": "Users",
   "系统": "System",
   "加载中...": "Loading...",
+  "操作未完成": "Action not completed",
+  "知道了": "Got it",
   "暂无": "None",
   "暂无数据": "No data",
   "没有匹配记录": "No matching records",

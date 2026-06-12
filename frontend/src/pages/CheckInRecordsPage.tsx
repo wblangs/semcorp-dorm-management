@@ -13,6 +13,7 @@ import {
 } from "../components/FormField";
 import type { Allocation, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 export function CheckInRecordsPage() {
   const { isAdmin } = useAuth();
@@ -122,6 +123,7 @@ export function CheckInRecordsPage() {
     event.preventDefault();
 
     if (!editingId) return;
+    if (!confirm("确认保存修改？")) return;
 
     setError("");
     setSubmitting(true);
@@ -154,6 +156,7 @@ export function CheckInRecordsPage() {
   };
 
   const onCheckout = async (row: Allocation) => {
+    if (!confirm("确认为该人员办理退房？")) return;
     setError("");
 
     try {
@@ -183,6 +186,7 @@ export function CheckInRecordsPage() {
   };
 
   const onRecover = async (row: Allocation) => {
+    if (!confirm("确认恢复该记录？")) return;
     setError("");
     try {
       await api.recoverAllocationUserHistory(row.id);
@@ -296,7 +300,7 @@ export function CheckInRecordsPage() {
         </form>
       ) : null}
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
 
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载入住记录中...</div>

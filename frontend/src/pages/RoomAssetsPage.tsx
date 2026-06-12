@@ -7,6 +7,7 @@ import { useDictionaries } from "../hooks/useDictionaries";
 import { DORM_PALETTE, REPORT_HEADER_FILL } from "../dormPalette";
 import type { Dorm, Room, RoomItem } from "../types";
 import { todayISO } from "../utils/date";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 const COLUMNS = ["宿舍", "房间", "物品", "型号", "数量"];
 
@@ -107,6 +108,7 @@ export function RoomAssetsPage() {
   const cancelEdit = () => setEditingItemId(null);
 
   const saveEdit = async (item: RoomItem) => {
+    if (!confirm("确认保存修改？")) return;
     setError("");
     setBusy(true);
     try {
@@ -297,7 +299,7 @@ export function RoomAssetsPage() {
         </div>
       ) : null}
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
 
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>

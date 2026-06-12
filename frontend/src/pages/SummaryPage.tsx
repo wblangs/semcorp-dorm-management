@@ -5,6 +5,7 @@ import { fieldControlClass, primaryButtonClass } from "../components/FormField";
 import { dormColorMap, REPORT_HEADER_FILL } from "../dormPalette";
 import type { Allocation, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 type SummaryRow = {
   seq: number;
@@ -204,7 +205,7 @@ export function SummaryPage() {
         <span>空铺：{emptyCount}</span>
       </div>
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
 
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>

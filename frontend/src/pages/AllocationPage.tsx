@@ -6,6 +6,7 @@ import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import type { Allocation, AvailableRoom, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 type Occupant = {
   id: number;
@@ -375,6 +376,7 @@ export function AllocationPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (editingId && !confirm("确认保存修改？")) return;
     setError("");
     setSubmitting(true);
 
@@ -436,6 +438,7 @@ export function AllocationPage() {
   };
 
   const onCheckout = async (row: Allocation) => {
+    if (!confirm("确认为该人员办理退房？")) return;
     setError("");
     try {
       await api.checkoutAllocation(row.id, todayISO());
@@ -852,7 +855,7 @@ export function AllocationPage() {
         </div>
       ) : null}
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
     </section>
   );
 }

@@ -6,6 +6,7 @@ import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Vehicle } from "../types";
+import { ErrorDialog } from "../components/ErrorDialog";
 
 type VehicleFormState = {
   plate_number: string;
@@ -38,7 +39,7 @@ const vehicleStatuses = [
 ];
 
 export function VehiclesPage() {
-  const { isAdmin, canEdit } = useAuth();
+  const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Vehicle[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
@@ -79,6 +80,7 @@ export function VehiclesPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (editingId && !confirm("确认保存修改？")) return;
     setError("");
     try {
       if (editingId) {
@@ -217,7 +219,7 @@ export function VehiclesPage() {
       </form>
       ) : null}
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
@@ -251,12 +253,12 @@ export function VehiclesPage() {
                       修改
                     </button>
                   ) : null}
-                  {isAdmin ? (
+                  {canEdit ? (
                     <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
                       删除
                     </button>
                   ) : null}
-                  {!canEdit && !isAdmin ? <span className="text-slate-400">-</span> : null}
+                  {!canEdit ? <span className="text-slate-400">-</span> : null}
                 </div>
               ),
             },

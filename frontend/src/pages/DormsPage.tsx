@@ -6,6 +6,7 @@ import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, prima
 import { useAuth } from "../auth/AuthContext";
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Vehicle } from "../types"; // CHANGED: 加入 Vehicle 类型
+import { ErrorDialog } from "../components/ErrorDialog";
 
 type DormFormState = {
   name: string;
@@ -26,7 +27,7 @@ const emptyForm: DormFormState = {
 };
 
 export function DormsPage() {
-  const { isAdmin, canEdit } = useAuth();
+  const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Dorm[]>([]);
 
@@ -64,6 +65,7 @@ export function DormsPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (editingId && !confirm("确认保存修改？")) return;
     setError("");
     try {
       const payload = {
@@ -97,7 +99,7 @@ export function DormsPage() {
   };
 
   const onDelete = async (row: Dorm) => {
-    if (!confirm(`确认删除宿舍 ${row.name}？关联房间也会一并删除。`)) return;
+    if (!confirm(`确认删除宿舍 ${row.name}？`)) return;
     setError("");
     try {
       await api.deleteDorm(row.id);
@@ -202,7 +204,7 @@ export function DormsPage() {
       </form>
       ) : null}
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</div> : null}
+      <ErrorDialog message={error} onClose={() => setError("")} />
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
       ) : (
@@ -244,12 +246,12 @@ export function DormsPage() {
                         修改
                       </button>
                     ) : null}
-                    {isAdmin ? (
+                    {canEdit ? (
                       <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
                         删除
                       </button>
                     ) : null}
-                    {!canEdit && !isAdmin ? <span className="text-slate-400">-</span> : null}
+                    {!canEdit ? <span className="text-slate-400">-</span> : null}
                   </div>
                 ),
               },
