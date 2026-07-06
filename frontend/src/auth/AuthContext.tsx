@@ -12,6 +12,7 @@ type AuthContextValue = {
   /** True for admin and user roles; false for read-only viewers. Gate all edit UI on this. */
   canEdit: boolean;
   login: (username: string, password: string) => Promise<void>;
+  loginWithDingtalk: (authCode: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -59,6 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canEdit: user?.role === "admin" || user?.role === "user",
       login: async (username: string, password: string) => {
         const result = await api.login({ username, password });
+        setAuthToken(result.token);
+        setUser(result.user);
+      },
+      loginWithDingtalk: async (authCode: string) => {
+        const result = await api.dingtalkLogin(authCode);
         setAuthToken(result.token);
         setUser(result.user);
       },

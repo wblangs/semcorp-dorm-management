@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import date, datetime, timedelta
 from typing import Optional, Union
 
@@ -156,6 +157,7 @@ def _serialize_user(user: User) -> dict:
         "role": user.role,
         "status": user.status,
         "last_login_at": user.last_login_at,
+        "dingtalk_userid": user.dingtalk_userid,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }
@@ -187,6 +189,55 @@ def login(username: str, password: str, db: Session):
     user = db.scalar(select(User).where(User.username == normalized_username, User.is_deleted.is_(False)))
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if user.status != "active":
+        raise HTTPException(status_code=403, detail="用户已禁用")
+    user.last_login_at = local_now()
+    db.commit()
+    db.refresh(user)
+    return {"token": create_access_token(user.username), "user": _serialize_user(user)}
+
+
+def dingtalk_login(auth_code: str, db: Session):
+    """免登: exchange a DingTalk authCode for a session token.
+
+    First-time DingTalk users are auto-provisioned as read-only viewers; an
+    admin can later raise their role (or link the DingTalk ID to an existing
+    account) in 用户管理.
+    """
+    from backend.services.dingtalk import get_user_by_auth_code
+
+    info = get_user_by_auth_code(auth_code)
+    user = db.scalar(
+        select(User).where(User.dingtalk_userid == info["userid"], User.is_deleted.is_(False))
+    )
+    if not user:
+        username = normalize_username(f"dd_{info['userid']}")[:80]
+        existing = db.scalar(select(User).where(User.username == username, User.is_deleted.is_(False)))
+        if existing:
+            user = existing
+            user.dingtalk_userid = info["userid"]
+        else:
+            user = User(
+                username=username,
+                # Random unusable password: this account only logs in via DingTalk
+                # until an admin resets a password for it.
+                password_hash=hash_password(secrets.token_urlsafe(24)),
+                display_name=info["name"] or username,
+                role="viewer",
+                status="active",
+                dingtalk_userid=info["userid"],
+            )
+            db.add(user)
+            db.flush()
+            _audit(
+                db,
+                entity_type="user",
+                entity_id=user.id,
+                action="create",
+                before_data=None,
+                after_data=_serialize_user(user),
+                operator="dingtalk",
+            )
     if user.status != "active":
         raise HTTPException(status_code=403, detail="用户已禁用")
     user.last_login_at = local_now()

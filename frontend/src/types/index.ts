@@ -175,6 +175,7 @@ export type User = {
   role: "admin" | "user" | "viewer";
   status: "active" | "disabled";
   last_login_at: string | null;
+  dingtalk_userid: string | null;
   created_at: string | null;
   updated_at: string | null;
 };

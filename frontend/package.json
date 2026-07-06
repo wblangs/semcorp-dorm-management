@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@types/file-saver": "^2.0.7",
+    "dingtalk-jsapi": "^3.2.9",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "react": "^19.1.0",

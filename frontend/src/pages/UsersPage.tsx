@@ -18,6 +18,7 @@ type UserFormState = {
   display_name: string;
   role: "admin" | "user" | "viewer";
   status: "active" | "disabled";
+  dingtalk_userid: string;
 };
 
 const emptyForm: UserFormState = {
@@ -26,6 +27,7 @@ const emptyForm: UserFormState = {
   display_name: "",
   role: "user",
   status: "active",
+  dingtalk_userid: "",
 };
 
 export function UsersPage() {
@@ -53,6 +55,7 @@ export function UsersPage() {
       display_name: user.display_name ?? "",
       role: user.role,
       status: user.status,
+      dingtalk_userid: user.dingtalk_userid ?? "",
     });
     setResetPassword("");
     setError("");
@@ -78,6 +81,7 @@ export function UsersPage() {
           display_name: form.display_name || null,
           role: form.role,
           status: form.status,
+          dingtalk_userid: form.dingtalk_userid.trim() || undefined,
         });
         if (resetPassword) {
           await api.resetUserPassword(editingId, resetPassword);
@@ -155,6 +159,15 @@ export function UsersPage() {
               <option value="disabled">disabled</option>
             </select>
           </FormField>
+          {editingId ? (
+            <FormField label="钉钉UserID（免登绑定）">
+              <input
+                className={fieldControlClass}
+                value={form.dingtalk_userid}
+                onChange={(event) => setForm({ ...form, dingtalk_userid: event.target.value })}
+              />
+            </FormField>
+          ) : null}
           <div className="flex items-end gap-2">
             <button className={primaryButtonClass}>{editingId ? "保存用户" : "新增用户"}</button>
             {editingId ? (
@@ -181,6 +194,7 @@ export function UsersPage() {
           { header: "显示名", cell: (user) => user.display_name || "-" },
           { header: "角色", cell: (user) => user.role },
           { header: "状态", cell: (user) => user.status },
+          { header: "钉钉绑定", cell: (user) => (user.dingtalk_userid ? "已绑定" : "-") },
           { header: "最后登录", cell: (user) => user.last_login_at || "-" },
           {
             header: "操作",

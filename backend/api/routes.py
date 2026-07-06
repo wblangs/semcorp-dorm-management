@@ -11,6 +11,7 @@ from backend.schemas import (
     AllocationUpdate,
     CheckoutRequest,
     DictionaryReplace,
+    DingTalkLoginRequest,
     DormCreate,
     DormUpdate,
     LoginRequest,
@@ -35,6 +36,19 @@ router = APIRouter(prefix="/api")
 @router.post("/auth/login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return management.login(payload.username, payload.password, db)
+
+
+@router.get("/auth/dingtalk-config")
+def dingtalk_config():
+    from backend.core.config import settings
+    from backend.services.dingtalk import is_configured
+
+    return {"enabled": is_configured(), "corp_id": settings.dingtalk_corp_id if is_configured() else ""}
+
+
+@router.post("/auth/dingtalk-login")
+def dingtalk_login(payload: DingTalkLoginRequest, db: Session = Depends(get_db)):
+    return management.dingtalk_login(payload.auth_code, db)
 
 
 @router.post("/auth/logout")

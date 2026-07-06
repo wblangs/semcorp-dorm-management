@@ -17,6 +17,10 @@ class Settings:
     # default check-in/out dates). The server OS may run in UTC; this keeps
     # date logic anchored to the site's local time.
     app_timezone: str = os.getenv("APP_TIMEZONE", "America/New_York")
+    # DingTalk 免登 (auto-login). All three must be set to enable it.
+    dingtalk_client_id: str = os.getenv("DINGTALK_CLIENT_ID", "")
+    dingtalk_client_secret: str = os.getenv("DINGTALK_CLIENT_SECRET", "")
+    dingtalk_corp_id: str = os.getenv("DINGTALK_CORP_ID", "")
     app_version: str = "v0.7"
 
     @cached_property
@@ -50,6 +54,9 @@ class Settings:
             app_env=source.get("APP_ENV", "DEV").upper(),
             cors_origins_raw=source.get("CORS_ORIGINS", "*"),
             app_timezone=source.get("APP_TIMEZONE", "America/New_York"),
+            dingtalk_client_id=source.get("DINGTALK_CLIENT_ID", ""),
+            dingtalk_client_secret=source.get("DINGTALK_CLIENT_SECRET", ""),
+            dingtalk_corp_id=source.get("DINGTALK_CORP_ID", ""),
         )
 
 

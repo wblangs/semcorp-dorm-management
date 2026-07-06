@@ -1,19 +1,57 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
+import { api } from "../api";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { fieldControlClass, FormField, primaryButtonClass } from "../components/FormField";
 import { useLanguage } from "../i18n";
 
+const isInsideDingtalk = () => /DingTalk/i.test(window.navigator.userAgent);
+
 export function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, login, loginWithDingtalk } = useAuth();
   const { language, toggleLanguage } = useLanguage();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [ddLoggingIn, setDdLoggingIn] = useState(() => isInsideDingtalk());
+
+  // 免登: when opened inside DingTalk and the server has DingTalk configured,
+  // exchange a JSAPI authCode for a session automatically. Any failure falls
+  // back to the normal username/password form.
+  useEffect(() => {
+    if (!isInsideDingtalk() || user) {
+      setDdLoggingIn(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const config = await api.getDingtalkConfig();
+        if (!config.enabled || cancelled) {
+          setDdLoggingIn(false);
+          return;
+        }
+        const dd = (await import("dingtalk-jsapi")).default;
+        const result = await dd.runtime.permission.requestAuthCode({ corpId: config.corp_id });
+        if (cancelled) return;
+        await loginWithDingtalk(result.code);
+        if (!cancelled) navigate("/", { replace: true });
+      } catch (err) {
+        if (!cancelled) {
+          setDdLoggingIn(false);
+          setError(err instanceof ApiError ? err.message : "钉钉自动登录失败，请使用账号密码登录");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -51,6 +89,9 @@ export function LoginPage() {
           <p className="mt-1 text-sm text-slate-500">内部试用版登录</p>
         </div>
 
+        {ddLoggingIn ? (
+          <div className="py-6 text-center text-sm text-slate-500">钉钉登录中...</div>
+        ) : (
         <div className="space-y-4">
           <FormField label="用户名" required>
             <input
@@ -74,6 +115,7 @@ export function LoginPage() {
             {submitting ? "登录中..." : "登录"}
           </button>
         </div>
+        )}
       </form>
     </div>
   );

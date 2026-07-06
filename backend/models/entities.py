@@ -17,6 +17,8 @@ class User(TimestampSoftDeleteMixin, Base):
     role: Mapped[str] = mapped_column(String(40), default="user", nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # DingTalk userid for 免登 (auto-login) account linking.
+    dingtalk_userid: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
 
 
 class Dorm(TimestampSoftDeleteMixin, Base):

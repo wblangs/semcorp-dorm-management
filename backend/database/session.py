@@ -174,6 +174,13 @@ def run_lightweight_migrations() -> None:
         users_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
         ).fetchone()
+        if users_table_exists:
+            user_columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            }
+            if "dingtalk_userid" not in user_columns:
+                safe_add_column(conn, "ALTER TABLE users ADD COLUMN dingtalk_userid VARCHAR(80)")
         if not users_table_exists:
             conn.execute(
                 text(

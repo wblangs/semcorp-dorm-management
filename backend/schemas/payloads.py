@@ -141,6 +141,11 @@ class UserUpdate(BaseModel):
     display_name: Optional[str] = None
     role: Optional[Literal["admin", "user", "viewer"]] = None
     status: Optional[Literal["active", "disabled"]] = None
+    dingtalk_userid: Optional[str] = None
+
+
+class DingTalkLoginRequest(BaseModel):
+    auth_code: str
 
 
 class UserPasswordReset(BaseModel):

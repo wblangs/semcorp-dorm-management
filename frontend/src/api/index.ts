@@ -30,6 +30,9 @@ type NewVehicle = Omit<Vehicle, "id">;
 export const api = {
   login: (payload: { username: string; password: string }) =>
     apiRequest<AuthResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  getDingtalkConfig: () => apiRequest<{ enabled: boolean; corp_id: string }>("/api/auth/dingtalk-config"),
+  dingtalkLogin: (auth_code: string) =>
+    apiRequest<AuthResponse>("/api/auth/dingtalk-login", { method: "POST", body: JSON.stringify({ auth_code }) }),
   logout: () => apiRequest<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   me: () => apiRequest<User>("/api/auth/me"),
   getSystemInfo: () => apiRequest<SystemInfo>("/api/system"),
@@ -48,6 +51,7 @@ export const api = {
       display_name?: string | null;
       role?: "admin" | "user" | "viewer";
       status?: "active" | "disabled";
+      dingtalk_userid?: string | null;
     },
   ) => apiRequest<User>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   resetUserPassword: (id: number, password: string) =>
