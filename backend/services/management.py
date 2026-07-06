@@ -240,6 +240,10 @@ def dingtalk_login(auth_code: str, db: Session):
             )
     if user.status != "active":
         raise HTTPException(status_code=403, detail="用户已禁用")
+    # Keep the display name in sync with the DingTalk directory, and heal
+    # accounts created before the name lookup permission was granted.
+    if info.get("name") and user.display_name != info["name"]:
+        user.display_name = info["name"]
     user.last_login_at = local_now()
     db.commit()
     db.refresh(user)
