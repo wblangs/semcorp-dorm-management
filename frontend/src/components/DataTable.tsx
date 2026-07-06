@@ -20,7 +20,7 @@ export function DataTable<T>({ columns, rows, rowKey, emptyText = "暂无数据"
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
             {columns.map((column) => (
-              <th key={column.header} className="whitespace-nowrap px-4 py-3 font-semibold">
+              <th key={column.header} className="whitespace-nowrap px-3 py-2.5 font-semibold sm:px-4 sm:py-3">
                 {column.header}
               </th>
             ))}
@@ -37,7 +37,7 @@ export function DataTable<T>({ columns, rows, rowKey, emptyText = "暂无数据"
           {rows.map((row) => (
             <tr key={rowKey(row)} className="transition hover:bg-slate-50/70" style={rowStyle?.(row)}>
               {columns.map((column) => (
-                <td key={column.header} className="px-4 py-3 text-slate-700">
+                <td key={column.header} className="px-3 py-2.5 text-slate-700 sm:px-4 sm:py-3">
                   {column.cell(row)}
                 </td>
               ))}

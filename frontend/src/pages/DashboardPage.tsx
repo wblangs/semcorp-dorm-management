@@ -38,7 +38,7 @@ export function DashboardPage() {
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">Dashboard</h2>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
         {/* ✅ 单独写续租按钮，不放进 cards.map */}
         <button
           type="button"

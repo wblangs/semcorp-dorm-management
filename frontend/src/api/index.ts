@@ -54,6 +54,7 @@ export const api = {
       dingtalk_userid?: string | null;
     },
   ) => apiRequest<User>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteUser: (id: number) => apiRequest<{ deleted: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
   resetUserPassword: (id: number, password: string) =>
     apiRequest<{ updated: boolean }>(`/api/users/${id}/reset-password`, {
       method: "POST",

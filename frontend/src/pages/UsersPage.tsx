@@ -4,6 +4,7 @@ import { api } from "../api";
 import { ApiError } from "../api/client";
 import { DataTable } from "../components/DataTable";
 import {
+  deleteButtonClass,
   editButtonClass,
   fieldControlClass,
   FormField,
@@ -60,6 +61,21 @@ export function UsersPage() {
     setResetPassword("");
     setError("");
     setMessage("");
+  }
+
+  async function handleDelete(user: User) {
+    if (!confirm(`确认删除用户 ${user.display_name || user.username}？`)) return;
+    setError("");
+    setMessage("");
+    try {
+      await api.deleteUser(user.id);
+      if (editingId === user.id) {
+        resetForm();
+      }
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "删除失败");
+    }
   }
 
   function resetForm() {
@@ -199,9 +215,14 @@ export function UsersPage() {
           {
             header: "操作",
             cell: (user) => (
-              <button type="button" className={editButtonClass} onClick={() => startEdit(user)}>
-                编辑
-              </button>
+              <div className="flex gap-2">
+                <button type="button" className={editButtonClass} onClick={() => startEdit(user)}>
+                  编辑
+                </button>
+                <button type="button" className={deleteButtonClass} onClick={() => void handleDelete(user)}>
+                  删除
+                </button>
+              </div>
             ),
           },
         ]}

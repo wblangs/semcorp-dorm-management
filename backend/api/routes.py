@@ -87,6 +87,15 @@ def update_user(
     return management.update_user(user_id, payload, db, operator=current_user.username)
 
 
+@router.delete("/users/{user_id}")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return management.delete_user(user_id, db, operator=current_user.username, operator_id=current_user.id)
+
+
 @router.post("/users/{user_id}/reset-password")
 def reset_user_password(
     user_id: int,

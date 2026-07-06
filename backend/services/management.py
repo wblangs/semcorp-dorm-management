@@ -297,6 +297,22 @@ def update_user(user_id: int, payload: UserUpdate, db: Session, operator: str = 
     return _serialize_user(user)
 
 
+def delete_user(user_id: int, db: Session, operator: str = "admin", operator_id: Optional[int] = None):
+    user = _get_active(db, User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if operator_id is not None and user.id == operator_id:
+        raise HTTPException(status_code=400, detail="不能删除当前登录的账号")
+    if user.role == "admin" and user.status == "active" and _active_admin_count(db) <= 1:
+        raise HTTPException(status_code=400, detail="不能删除最后一个 active admin")
+    before = _serialize_user(user)
+    user.is_deleted = True
+    db.flush()
+    _audit(db, entity_type="user", entity_id=user.id, action="delete", before_data=before, after_data=_serialize_user(user), operator=operator)
+    db.commit()
+    return {"deleted": True}
+
+
 def reset_user_password(user_id: int, payload: UserPasswordReset, db: Session, operator: str = "admin"):
     if not payload.password:
         raise HTTPException(status_code=400, detail="密码不能为空")
