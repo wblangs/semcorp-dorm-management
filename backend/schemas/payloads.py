@@ -92,6 +92,13 @@ class CheckoutRequest(BaseModel):
     check_out_date: Optional[date] = None
 
 
+class AllocationTempLeave(BaseModel):
+    """Set both dates to mark 临时空出; send both as null to clear it."""
+
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
 class AllocationUpdate(BaseModel):
     dorm_id: Optional[int] = None
     room_id: Optional[int] = None

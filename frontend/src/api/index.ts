@@ -131,6 +131,11 @@ export const api = {
     apiRequest<{ deleted: boolean }>(`/api/allocations/backup/${id}`, { method: "DELETE" }),
   recoverAllocationUserHistory: (id: number) =>
     apiRequest<Allocation>(`/api/allocations/backup/${id}/recover`, { method: "POST" }),
+  setAllocationTempLeave: (id: number, payload: { start_date: string | null; end_date: string | null }) =>
+    apiRequest<Allocation>(`/api/allocations/${id}/temp-leave`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   checkoutAllocation: (id: number, check_out_date: string) =>
     apiRequest<Allocation>(`/api/allocations/${id}/checkout`, {
       method: "POST",

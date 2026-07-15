@@ -113,6 +113,9 @@ class Allocation(TimestampSoftDeleteMixin, Base):
     actual_check_out_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     check_out_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # 临时空出: the resident is away and the bed is temporarily available.
+    temp_leave_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    temp_leave_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     status: Mapped[Literal["active", "checked_out"]] = mapped_column(String(20), default="active")
     hidden_from_user_history: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

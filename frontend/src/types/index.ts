@@ -61,6 +61,8 @@ export type Allocation = {
   actual_check_out_date: string | null;
   note: string | null;
   check_out_date: string | null;
+  temp_leave_start: string | null;
+  temp_leave_end: string | null;
   status: "active" | "checked_out";
   hidden_from_user_history: boolean;
 };

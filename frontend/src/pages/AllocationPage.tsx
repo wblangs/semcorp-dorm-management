@@ -64,6 +64,9 @@ export function AllocationPage() {
     unassigned: false,
     availability: false,
   });
+  // 临时空出 dialog state
+  const [tempLeaveFor, setTempLeaveFor] = useState<Allocation | null>(null);
+  const [tempLeaveDraft, setTempLeaveDraft] = useState({ start: "", end: "" });
 
   const [form, setForm] = useState({
     person_id: "",
@@ -437,6 +440,29 @@ export function AllocationPage() {
     });
   };
 
+  const openTempLeave = (row: Allocation) => {
+    setTempLeaveFor(row);
+    setTempLeaveDraft({
+      start: row.temp_leave_start ?? todayISO(),
+      end: row.temp_leave_end ?? "",
+    });
+  };
+
+  const saveTempLeave = async (clear: boolean) => {
+    if (!tempLeaveFor) return;
+    setError("");
+    try {
+      await api.setAllocationTempLeave(tempLeaveFor.id, {
+        start_date: clear ? null : tempLeaveDraft.start || null,
+        end_date: clear ? null : tempLeaveDraft.end || null,
+      });
+      setTempLeaveFor(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   const onCheckout = async (row: Allocation) => {
     if (!confirm("确认为该人员办理退房？")) return;
     setError("");
@@ -780,14 +806,27 @@ export function AllocationPage() {
                     { header: "入住日期", cell: (row) => row.check_in_date },
                     { header: "预计退宿日期", cell: (row) => row.expected_check_out_date ?? "-" },
                     { header: "备注", cell: (row) => row.note ?? "-" },
-                    { header: "状态", cell: () => "在住" },
+                    {
+                      header: "状态",
+                      cell: (row) =>
+                        row.temp_leave_start && row.temp_leave_end ? (
+                          <span className="inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+                            临时空出 {row.temp_leave_start} ~ {row.temp_leave_end}
+                          </span>
+                        ) : (
+                          "在住"
+                        ),
+                    },
                     {
                       header: "操作",
                       cell: (row) =>
                         canEdit ? (
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
                               修改
+                            </button>
+                            <button className={editButtonClass} type="button" onClick={() => openTempLeave(row)}>
+                              临时空出
                             </button>
                             <button className={editButtonClass} type="button" onClick={() => void onCheckout(row)}>
                               退房
@@ -852,6 +891,57 @@ export function AllocationPage() {
               </div>
             ) : null}
           </section>
+        </div>
+      ) : null}
+
+      {tempLeaveFor ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={() => setTempLeaveFor(null)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-1 text-sm font-semibold text-slate-900">设置临时空出</h3>
+            <p className="mb-4 text-sm text-slate-500">
+              {personMap.get(tempLeaveFor.person_id) ?? ""} · {dormMap.get(tempLeaveFor.dorm_id) ?? ""} /{" "}
+              {roomMap.get(tempLeaveFor.room_id) ?? ""}
+            </p>
+            <div className="space-y-3">
+              <FormField label="开始日期" required>
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  value={tempLeaveDraft.start}
+                  onChange={(e) => setTempLeaveDraft((d) => ({ ...d, start: e.target.value }))}
+                />
+              </FormField>
+              <FormField label="结束日期" required>
+                <input
+                  className={fieldControlClass}
+                  type="date"
+                  value={tempLeaveDraft.end}
+                  onChange={(e) => setTempLeaveDraft((d) => ({ ...d, end: e.target.value }))}
+                />
+              </FormField>
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              {tempLeaveFor.temp_leave_start ? (
+                <button className={`${deleteButtonClass} px-4 py-2 text-sm`} type="button" onClick={() => void saveTempLeave(true)}>
+                  清除临时空出
+                </button>
+              ) : null}
+              <button className={secondaryButtonClass} type="button" onClick={() => setTempLeaveFor(null)}>
+                取消
+              </button>
+              <button
+                className={primaryButtonClass}
+                type="button"
+                disabled={!tempLeaveDraft.start || !tempLeaveDraft.end}
+                onClick={() => void saveTempLeave(false)}
+              >
+                保存
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 

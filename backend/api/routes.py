@@ -9,6 +9,7 @@ from backend.models import User
 from backend.schemas import (
     AllocationCreate,
     AllocationUpdate,
+    AllocationTempLeave,
     CheckoutRequest,
     DictionaryReplace,
     DingTalkLoginRequest,
@@ -322,6 +323,16 @@ def update_allocation(
     current_user: User = Depends(require_editor),
 ):
     return management.update_allocation(allocation_id, payload, db, operator=current_user.username)
+
+
+@router.post("/allocations/{allocation_id}/temp-leave")
+def set_allocation_temp_leave(
+    allocation_id: int,
+    payload: AllocationTempLeave,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.set_allocation_temp_leave(allocation_id, payload, db, operator=current_user.username)
 
 
 @router.post("/allocations/{allocation_id}/checkout")

@@ -88,6 +88,10 @@ export function SummaryPage() {
         const occupants = activeByRoom.get(room.id) ?? [];
         occupants.forEach((allocation) => {
           const person = peopleMap.get(allocation.person_id);
+          const tempLeave =
+            allocation.temp_leave_start && allocation.temp_leave_end
+              ? `临时空出 ${allocation.temp_leave_start} ~ ${allocation.temp_leave_end}`
+              : "";
           seq += 1;
           result.push({
             seq,
@@ -100,7 +104,7 @@ export function SummaryPage() {
             title: "",
             room: room.room_name,
             moveInDate: allocation.check_in_date ?? "",
-            note: allocation.note ?? "",
+            note: [allocation.note, tempLeave].filter(Boolean).join("；"),
             isEmpty: false,
 
           });
@@ -174,6 +178,8 @@ export function SummaryPage() {
           cell.alignment = { horizontal: column.align, vertical: "middle" };
           if (row.isEmpty && column.key === "note") {
             cell.font = { bold: true, color: { argb: "FFFF0000" } };
+          } else if (column.key === "note" && row.note.includes("临时空出")) {
+            cell.font = { bold: true, color: { argb: "FFD97706" } };
           }
         });
       });
@@ -251,8 +257,12 @@ export function SummaryPage() {
                         <td
                           key={column.key}
                           className={`border border-slate-100 px-3 py-2 ${column.align === "center" ? "text-center" : "text-left"} ${
-                            row.isEmpty && column.key === "note" ? "font-bold text-red-600" : "text-slate-800"
-                          }`} // CHANGE
+                            row.isEmpty && column.key === "note"
+                              ? "font-bold text-red-600"
+                              : column.key === "note" && row.note.includes("临时空出")
+                                ? "font-semibold text-amber-600"
+                                : "text-slate-800"
+                          }`}
                         >
                           {column.key === "dormName" ? ( // CHANGE
                             <span

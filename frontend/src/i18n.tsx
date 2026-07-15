@@ -171,6 +171,11 @@ const translations: Record<string, string> = {
   "保存入住记录": "Save Allocation",
   "提交中...": "Submitting...",
   "退房": "Checkout",
+  "临时空出": "Temp Available",
+  "设置临时空出": "Set Temporary Availability",
+  "清除临时空出": "Clear Temp Availability",
+  "开始日期": "Start Date",
+  "结束日期": "End Date",
   "已退宿": "Checked Out",
   "搜索入住分配记录": "Search allocation records",
   "车辆管理": "Vehicle Management",
@@ -293,6 +298,7 @@ const prefixTranslations = [
   ["性别：", "Gender: "],
   ["人员类型：", "Person Type: "],
   ["剩余 ", "Remaining "],
+  ["临时空出 ", "Temp Available "],
   ["超期 ", "Overdue "],
 ];
 

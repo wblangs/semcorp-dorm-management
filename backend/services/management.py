@@ -860,6 +860,34 @@ def update_allocation(allocation_id: int, payload: AllocationUpdate, db: Session
     return allocation
 
 
+def set_allocation_temp_leave(allocation_id: int, payload, db: Session, operator: str = "admin"):
+    allocation = _get_active(db, Allocation, allocation_id)
+    if not allocation:
+        raise HTTPException(status_code=404, detail="入住记录不存在")
+    if allocation.status != "active":
+        raise HTTPException(status_code=400, detail="仅在住记录可设置临时空出")
+    if (payload.start_date is None) != (payload.end_date is None):
+        raise HTTPException(status_code=400, detail="请同时填写开始和结束日期")
+    if payload.start_date and payload.end_date and payload.end_date < payload.start_date:
+        raise HTTPException(status_code=400, detail="结束日期不能早于开始日期")
+    before = _model_data(allocation)
+    allocation.temp_leave_start = payload.start_date
+    allocation.temp_leave_end = payload.end_date
+    db.flush()
+    _audit(
+        db,
+        entity_type="allocation",
+        entity_id=allocation.id,
+        action="temp_leave",
+        before_data=before,
+        after_data=_model_data(allocation),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(allocation)
+    return allocation
+
+
 def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Session, operator: str = "admin"):
     allocation = _get_active(db, Allocation, allocation_id)
     if not allocation:
@@ -871,6 +899,9 @@ def checkout_allocation(allocation_id: int, payload: CheckoutRequest, db: Sessio
     allocation.actual_check_out_date = checkout_date
     allocation.check_out_date = checkout_date
     allocation.status = "checked_out"
+    # A checked-out record can't be temporarily away.
+    allocation.temp_leave_start = None
+    allocation.temp_leave_end = None
     db.flush()
     _audit(
         db,
