@@ -26,12 +26,12 @@ export function DashboardPage() {
   }
 
   const housingCards = [
-    { label: "宿舍总数", value: data.dormTotal },
-    { label: "房间总数", value: data.roomTotal },
-    { label: "总床位数", value: data.bedTotal },
-    { label: "当前入住人数", value: data.currentOccupancy },
-    { label: "空床数", value: data.emptyBeds },
-    { label: "入住率", value: `${data.occupancyRate}%` },
+    { label: "宿舍总数", value: data.dormTotal, to: "/dorms" },
+    { label: "房间总数", value: data.roomTotal, to: "/rooms" },
+    { label: "总床位数", value: data.bedTotal, to: "/rooms" },
+    { label: "当前入住人数", value: data.currentOccupancy, to: "/allocations" },
+    { label: "空床数", value: data.emptyBeds, to: "/allocations" },
+    { label: "入住率", value: `${data.occupancyRate}%`, to: "/summary" },
   ];
 
   return (
@@ -53,10 +53,14 @@ export function DashboardPage() {
         </button>
 
         {housingCards.map((card) => (
-          <article key={card.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <Link
+            key={card.label}
+            to={card.to}
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/40"
+          >
             <p className="text-sm text-slate-500">{card.label}</p>
             <p className="mt-1 text-2xl font-bold">{card.value}</p>
-          </article>
+          </Link>
         ))}
 
         <Link
