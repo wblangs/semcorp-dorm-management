@@ -37,12 +37,13 @@ const COLUMNS: { key: keyof SummaryRow; header: string; width: number; align: "c
 const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
 // CHANGE: Fixed report order inside each dorm: 主卧 1..n -> 次卧 1..n -> 客厅 1..n -> 地下室 -> 车库.
-// Rooms whose name matches none of the groups keep their old alphabetical order after these groups.
+// A room joins a group when its name CONTAINS the keyword ("大客厅"/"小客厅" both count as 客厅),
+// checked in group order. Rooms matching no group keep their old alphabetical order after these groups.
 const ROOM_GROUP_ORDER = ["主卧", "次卧", "客厅", "地下室", "车库"];
 
 const roomSortKey = (roomName: string): { group: number; num: number; name: string } => {
   const name = roomName.trim();
-  const groupIndex = ROOM_GROUP_ORDER.findIndex((prefix) => name.startsWith(prefix));
+  const groupIndex = ROOM_GROUP_ORDER.findIndex((keyword) => name.includes(keyword));
   const digits = name.match(/\d+/);
   return {
     group: groupIndex === -1 ? ROOM_GROUP_ORDER.length : groupIndex,
