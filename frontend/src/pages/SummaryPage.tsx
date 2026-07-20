@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../api";
 import { fieldControlClass, primaryButtonClass } from "../components/FormField";
@@ -9,6 +9,8 @@ import { ErrorDialog } from "../components/ErrorDialog";
 
 type SummaryRow = {
   rowKey: string;
+  allocationId: number | null;
+  rawNote: string;
   seq: number;
   dormId: number;
   dormName: string;
@@ -72,6 +74,11 @@ export function SummaryPage() {
   const [dragEnabledKey, setDragEnabledKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [dragError, setDragError] = useState("");
+  // CHANGE: Inline note editing (double-click the note cell of an occupied row).
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const cancelNoteEditRef = useRef(false);
 
   const load = async () => {
     try {
@@ -125,6 +132,8 @@ export function SummaryPage() {
           seq += 1;
           result.push({
             rowKey: `alloc-${allocation.id}`,
+            allocationId: allocation.id,
+            rawNote: allocation.note ?? "",
             seq,
             dormId: dorm.id,
             dormName: dorm.name,
@@ -145,6 +154,8 @@ export function SummaryPage() {
           seq += 1;
           result.push({
             rowKey: `empty-${room.id}-${i}`,
+            allocationId: null,
+            rawNote: "",
             seq,
             dormId: dorm.id,
             dormName: dorm.name,
@@ -163,9 +174,19 @@ export function SummaryPage() {
     return result;
   }, [allocations, dorms, people, rooms]);
 
-  // CHANGE: Rows shown/exported follow the user's drag order; reset when data reloads.
+  // CHANGE: Rows shown/exported follow the user's drag order. When data refreshes
+  // (e.g. after an inline note edit), keep the existing order for known rows.
   useEffect(() => {
-    setOrderedRows(rows);
+    setOrderedRows((prev) => {
+      if (prev.length === 0) return rows;
+      const position = new Map(prev.map((row, index) => [row.rowKey, index]));
+      const next = [...rows].sort(
+        (a, b) =>
+          (position.get(a.rowKey) ?? Number.MAX_SAFE_INTEGER) -
+          (position.get(b.rowKey) ?? Number.MAX_SAFE_INTEGER),
+      );
+      return next.map((row, index) => ({ ...row, seq: index + 1 }));
+    });
   }, [rows]);
 
   // CHANGE: Auto-dismiss the drag error after a few seconds.
@@ -192,6 +213,30 @@ export function SummaryPage() {
       next.splice(targetIndex, 0, source);
       return next.map((row, index) => ({ ...row, seq: index + 1 }));
     });
+  };
+
+  // CHANGE: Save an inline note edit back to the allocation, then refresh local data.
+  const handleNoteSave = async (row: SummaryRow) => {
+    if (row.allocationId == null) return;
+    const value = editingValue.trim();
+    if (value === row.rawNote) {
+      setEditingKey(null);
+      return;
+    }
+    setSavingNote(true);
+    try {
+      await api.updateAllocation(row.allocationId, { note: value });
+      setAllocations((prev) =>
+        prev.map((allocation) =>
+          allocation.id === row.allocationId ? { ...allocation, note: value } : allocation,
+        ),
+      );
+      setEditingKey(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingNote(false);
+    }
   };
 
   const filteredRows = useMemo(() => {
@@ -382,6 +427,56 @@ export function SummaryPage() {
                             >
                               {row[column.key]}
                             </span>
+                          ) : column.key === "note" && !row.isEmpty ? ( // CHANGE: Double-click to edit the note.
+                            editingKey === row.rowKey ? (
+                              <input
+                                autoFocus
+                                className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                                value={editingValue}
+                                disabled={savingNote}
+                                placeholder="回车保存，Esc 取消"
+                                onChange={(event) => setEditingValue(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") event.currentTarget.blur();
+                                  if (event.key === "Escape") {
+                                    cancelNoteEditRef.current = true;
+                                    event.currentTarget.blur();
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (cancelNoteEditRef.current) {
+                                    cancelNoteEditRef.current = false;
+                                    setEditingKey(null);
+                                    return;
+                                  }
+                                  void handleNoteSave(row);
+                                }}
+                              />
+                            ) : (
+                              <span
+                                className="flex min-h-[1.25rem] items-center gap-1"
+                                title="双击文字或点击图标编辑备注"
+                                onDoubleClick={() => {
+                                  setEditingKey(row.rowKey);
+                                  setEditingValue(row.rawNote);
+                                }}
+                              >
+                                <span className="flex-1 cursor-text">{row.note}</span>
+                                <button
+                                  type="button"
+                                  aria-label="编辑备注"
+                                  className="shrink-0 rounded p-0.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                                  onClick={() => {
+                                    setEditingKey(row.rowKey);
+                                    setEditingValue(row.rawNote);
+                                  }}
+                                >
+                                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                                    <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-8.5 8.5a1 1 0 0 1-.44.253l-3 .857a.5.5 0 0 1-.618-.618l.857-3a1 1 0 0 1 .253-.44l8.62-8.38Z" />
+                                  </svg>
+                                </button>
+                              </span>
+                            )
                           ) : (
                             row[column.key]
                           )}
