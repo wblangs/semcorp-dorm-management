@@ -8,6 +8,7 @@ import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
 
 type SummaryRow = {
+  rowKey: string;
   seq: number;
   dormId: number;
   dormName: string;
@@ -33,6 +34,29 @@ const COLUMNS: { key: keyof SummaryRow; header: string; width: number; align: "c
 
 const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
+// CHANGE: Fixed report order inside each dorm: 主卧 1..n -> 次卧 1..n -> 客厅 1..n -> 地下室 -> 车库.
+// Rooms whose name matches none of the groups keep their old alphabetical order after these groups.
+const ROOM_GROUP_ORDER = ["主卧", "次卧", "客厅", "地下室", "车库"];
+
+const roomSortKey = (roomName: string): { group: number; num: number; name: string } => {
+  const name = roomName.trim();
+  const groupIndex = ROOM_GROUP_ORDER.findIndex((prefix) => name.startsWith(prefix));
+  const digits = name.match(/\d+/);
+  return {
+    group: groupIndex === -1 ? ROOM_GROUP_ORDER.length : groupIndex,
+    num: digits ? Number.parseInt(digits[0], 10) : Number.MAX_SAFE_INTEGER,
+    name,
+  };
+};
+
+const compareRooms = (a: string, b: string): number => {
+  const keyA = roomSortKey(a);
+  const keyB = roomSortKey(b);
+  if (keyA.group !== keyB.group) return keyA.group - keyB.group;
+  if (keyA.num !== keyB.num) return keyA.num - keyB.num;
+  return keyA.name.localeCompare(keyB.name, "zh-Hans-CN");
+};
+
 export function SummaryPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
@@ -42,6 +66,12 @@ export function SummaryPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
+  // CHANGE: Drag-and-drop reordering state for the export table.
+  const [orderedRows, setOrderedRows] = useState<SummaryRow[]>([]);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dragEnabledKey, setDragEnabledKey] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [dragError, setDragError] = useState("");
 
   const load = async () => {
     try {
@@ -83,7 +113,7 @@ export function SummaryPage() {
     dorms.forEach((dorm) => {
       const dormRooms = rooms
         .filter((room) => room.dorm_id === dorm.id)
-        .sort((a, b) => a.room_name.localeCompare(b.room_name, "zh-Hans-CN"));
+        .sort((a, b) => compareRooms(a.room_name, b.room_name)); // CHANGE
       dormRooms.forEach((room) => {
         const occupants = activeByRoom.get(room.id) ?? [];
         occupants.forEach((allocation) => {
@@ -94,6 +124,7 @@ export function SummaryPage() {
               : "";
           seq += 1;
           result.push({
+            rowKey: `alloc-${allocation.id}`,
             seq,
             dormId: dorm.id,
             dormName: dorm.name,
@@ -113,6 +144,7 @@ export function SummaryPage() {
         for (let i = 0; i < freeBeds; i += 1) {
           seq += 1;
           result.push({
+            rowKey: `empty-${room.id}-${i}`,
             seq,
             dormId: dorm.id,
             dormName: dorm.name,
@@ -131,14 +163,45 @@ export function SummaryPage() {
     return result;
   }, [allocations, dorms, people, rooms]);
 
+  // CHANGE: Rows shown/exported follow the user's drag order; reset when data reloads.
+  useEffect(() => {
+    setOrderedRows(rows);
+  }, [rows]);
+
+  // CHANGE: Auto-dismiss the drag error after a few seconds.
+  useEffect(() => {
+    if (!dragError) return;
+    const timer = setTimeout(() => setDragError(""), 4000);
+    return () => clearTimeout(timer);
+  }, [dragError]);
+
+  const handleRowDrop = (targetKey: string) => {
+    setDragOverKey(null);
+    if (!dragKey || dragKey === targetKey) return;
+    const source = orderedRows.find((row) => row.rowKey === dragKey);
+    const target = orderedRows.find((row) => row.rowKey === targetKey);
+    if (!source || !target) return;
+    if (source.dormId !== target.dormId) {
+      setDragError(`不能将「${source.dormName}」的记录拖拽到「${target.dormName}」，只能在同一宿舍内调整顺序。`);
+      return;
+    }
+    setDragError("");
+    setOrderedRows((prev) => {
+      const next = prev.filter((row) => row.rowKey !== dragKey);
+      const targetIndex = next.findIndex((row) => row.rowKey === targetKey);
+      next.splice(targetIndex, 0, source);
+      return next.map((row, index) => ({ ...row, seq: index + 1 }));
+    });
+  };
+
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (!keyword) return rows;
-    return rows.filter((row) =>
+    if (!keyword) return orderedRows;
+    return orderedRows.filter((row) =>
       [row.dormName, row.name, row.department, row.title, row.room, row.moveInDate, row.note]
         .some((value) => value.toLowerCase().includes(keyword)),
     );
-  }, [rows, search]);
+  }, [orderedRows, search]);
 
   const occupiedCount = rows.filter((row) => !row.isEmpty).length;
   const emptyCount = rows.filter((row) => row.isEmpty).length;
@@ -212,6 +275,9 @@ export function SummaryPage() {
       </div>
 
       <ErrorDialog message={error} onClose={() => setError("")} />
+      {dragError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{dragError}</div>
+      ) : null}
 
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
@@ -244,13 +310,42 @@ export function SummaryPage() {
                 ) : null}
                 {filteredRows.map((row) => {
                   const color = dormColor.get(row.dormId); // CHANGE
+                  // CHANGE: Drag state for this row.
+                  const isDragging = dragKey === row.rowKey;
+                  const isDragOver = dragOverKey === row.rowKey && dragKey !== row.rowKey;
+                  const draggedRow = dragKey ? orderedRows.find((item) => item.rowKey === dragKey) : null;
+                  const isInvalidTarget = isDragOver && draggedRow != null && draggedRow.dormId !== row.dormId;
 
                   return (
                     <tr
-                      key={row.seq}
+                      key={row.rowKey}
+                      draggable={dragEnabledKey === row.rowKey} // CHANGE: Only draggable via the row handle.
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        setDragKey(row.rowKey);
+                        setDragError("");
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setDragOverKey(row.rowKey);
+                      }}
+                      onDragLeave={() => {
+                        setDragOverKey((current) => (current === row.rowKey ? null : current));
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        handleRowDrop(row.rowKey);
+                      }}
+                      onDragEnd={() => {
+                        setDragKey(null);
+                        setDragEnabledKey(null);
+                        setDragOverKey(null);
+                      }}
                       style={{
-                        backgroundColor: "#ffffff",
-                        borderLeft: `5px solid ${color?.border ?? "#e5e7eb"}`,
+                        backgroundColor: isInvalidTarget ? "#fef2f2" : isDragOver ? "#eff6ff" : "#ffffff", // CHANGE
+                        borderLeft: `5px solid ${color?.border ?? "#e5e7eb"}`, // CHANGE
+                        opacity: isDragging ? 0.5 : 1, // CHANGE
                       }}
                     >
                       {COLUMNS.map((column) => (
@@ -264,7 +359,19 @@ export function SummaryPage() {
                                 : "text-slate-800"
                           }`}
                         >
-                          {column.key === "dormName" ? ( // CHANGE
+                          {column.key === "seq" ? ( // CHANGE: Row-head drag handle.
+                            <span className="inline-flex items-center gap-1">
+                              <span
+                                className="cursor-grab select-none text-slate-400 hover:text-slate-600 active:cursor-grabbing"
+                                title="按住拖拽调整顺序（仅限同一宿舍内）"
+                                onMouseDown={() => setDragEnabledKey(row.rowKey)}
+                                onMouseUp={() => setDragEnabledKey(null)}
+                              >
+                                ⠿
+                              </span>
+                              {row.seq}
+                            </span>
+                          ) : column.key === "dormName" ? ( // CHANGE
                             <span
                               className="inline-flex rounded-full border px-3 py-1 text-sm font-semibold"
                               style={{
