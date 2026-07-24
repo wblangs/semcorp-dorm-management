@@ -28,8 +28,21 @@ source .venv/bin/activate
 echo "== Install backend dependencies =="
 pip install -r requirements.txt
 
+echo "== Load .env (DATABASE_URL etc.) =="
+# Without this, alembic falls back to the default SQLite file and the real
+# (e.g. MySQL) database silently never gets migrated.
+if [ -f ".env" ]; then
+  set -a
+  source ".env"
+  set +a
+  echo "loaded .env"
+else
+  echo "WARNING: no .env found — alembic will use the default SQLite database"
+fi
+
 echo "== Run database migrations =="
 alembic upgrade head
+echo "migrated database: ${DATABASE_URL:-sqlite:///./dorm_commute.db (default)}" | sed 's#://[^:]*:[^@]*@#://***:***@#'
 
 echo "== Build frontend =="
 cd frontend
