@@ -1,5 +1,20 @@
 from .base import Base
-from .entities import AuditLog, Allocation, Dictionary, DictionaryItem, Dorm, Person, Room, RoomItem, Stay, User, Vehicle
+from .entities import (
+    AuditLog,
+    Allocation,
+    Dictionary,
+    DictionaryItem,
+    Dorm,
+    Person,
+    Room,
+    RoomItem,
+    Stay,
+    User,
+    UtilityAccount,
+    UtilityBill,
+    UtilityBillRecipient,
+    Vehicle,
+)
 
 __all__ = [
     "Base",
@@ -11,6 +26,9 @@ __all__ = [
     "Allocation",
     "Vehicle",
     "User",
+    "UtilityAccount",
+    "UtilityBill",
+    "UtilityBillRecipient",
     "Dictionary",
     "DictionaryItem",
     "AuditLog",

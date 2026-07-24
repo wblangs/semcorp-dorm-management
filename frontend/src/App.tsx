@@ -15,9 +15,11 @@ import { RoomAssetsPage } from "./pages/RoomAssetsPage";
 import { StayPage } from "./pages/StayPage";
 import { SystemPage } from "./pages/SystemPage";
 import { UsersPage } from "./pages/UsersPage";
-import { VehiclesPage } from "./pages/VehiclesPage";
+// HIDDEN: 车辆模块暂时隐藏
+// import { VehiclesPage } from "./pages/VehiclesPage";
 import { CheckInRecordsPage } from "./pages/CheckInRecordsPage";
 import { SummaryPage } from "./pages/SummaryPage";
+import { UtilityBillsPage } from "./pages/UtilityBillsPage";
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -60,7 +62,9 @@ function AppRoutes() {
           }
         />
 
-        <Route path="/vehicles" element={<VehiclesPage />} />
+        {/* HIDDEN: 车辆模块暂时隐藏 */}
+        {/* <Route path="/vehicles" element={<VehiclesPage />} /> */}
+        <Route path="/utility-bills" element={<UtilityBillsPage />} />
         <Route
           path="/dictionaries"
           element={

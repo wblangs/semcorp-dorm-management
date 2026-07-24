@@ -25,6 +25,7 @@ export function DictionariesPage() {
     departments: emptyOption,
     visaTypes: emptyOption,
     vehicleTypes: emptyOption,
+    feeTypes: emptyOption,
     statuses: emptyOption,
   });
 

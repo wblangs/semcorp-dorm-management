@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampSoftDeleteMixin
@@ -137,6 +137,52 @@ class Vehicle(TimestampSoftDeleteMixin, Base):
     maintenance_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="available")
+
+
+class UtilityBill(TimestampSoftDeleteMixin, Base):
+    """水电网气房费: a monthly payment item for a dorm (rent/water/electricity/internet/gas)."""
+
+    __tablename__ = "utility_bills"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dorm_id: Mapped[int] = mapped_column(ForeignKey("dorms.id"), nullable=False, index=True)
+    # Fee type value from the feeTypes dictionary (房租/水费/电费/网费/燃气费/...).
+    fee_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    # 宿舍账号: free-text account note (e.g. the provider account this bill is paid under).
+    account: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    status: Mapped[Literal["pending", "paid"]] = mapped_column(String(20), default="pending", nullable=False)
+    # Date the DingTalk reminder was sent; None until sent (also the idempotency guard).
+    reminded_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
+
+class UtilityAccount(TimestampSoftDeleteMixin, Base):
+    """缴费账户: the provider account (户号/登录信息) behind a dorm's utility service."""
+
+    __tablename__ = "utility_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dorm_id: Mapped[int] = mapped_column(ForeignKey("dorms.id"), nullable=False, index=True)
+    # Fee type value from the feeTypes dictionary (房租/水费/电费/网费/燃气费/...).
+    fee_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    provider: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    account_number: Mapped[str] = mapped_column(String(100), nullable=False)
+    login_username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    login_password: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+
+class UtilityBillRecipient(TimestampSoftDeleteMixin, Base):
+    """A system user who receives DingTalk reminders for utility bill due dates."""
+
+    __tablename__ = "utility_bill_recipients"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_utility_bill_recipient_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
 
 
 class Dictionary(TimestampSoftDeleteMixin, Base):

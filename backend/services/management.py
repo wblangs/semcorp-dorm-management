@@ -10,7 +10,22 @@ from sqlalchemy.orm import Session
 from backend.auth import create_access_token, hash_password, normalize_username, verify_password
 from backend.core.clock import local_now, local_today
 from backend.core.config import settings
-from backend.models import AuditLog, Allocation, Dictionary, DictionaryItem, Dorm, Person, Room, RoomItem, Stay, User, Vehicle
+from backend.models import (
+    AuditLog,
+    Allocation,
+    Dictionary,
+    DictionaryItem,
+    Dorm,
+    Person,
+    Room,
+    RoomItem,
+    Stay,
+    User,
+    UtilityAccount,
+    UtilityBill,
+    UtilityBillRecipient,
+    Vehicle,
+)
 from backend.schemas import (
     AllocationCreate,
     AllocationUpdate,
@@ -25,6 +40,11 @@ from backend.schemas import (
     RoomItemCreate,
     RoomItemUpdate,
     StayUpsert,
+    UtilityAccountCreate,
+    UtilityAccountUpdate,
+    UtilityBillCreate,
+    UtilityBillRecipientsReplace,
+    UtilityBillUpdate,
     VehicleCreate,
     VehicleUpdate,
     UserCreate,
@@ -48,6 +68,10 @@ DEFAULT_DICTIONARIES = {
     "personTypes": {
         "label": "人员类型",
         "items": [("Employee", "Employee"), ("Contractor", "Contractor"), ("Visitor", "Visitor")],
+    },
+    "feeTypes": {
+        "label": "缴费类型",
+        "items": [("房租", "房租"), ("水费", "水费"), ("电费", "电费"), ("网费", "网费"), ("燃气费", "燃气费")],
     },
     "departments": {
         "label": "部门",
@@ -1089,6 +1113,287 @@ def delete_vehicle(vehicle_id: int, db: Session, operator: str = "admin"):
     )
     db.commit()
     return {"deleted": True}
+
+
+# ---------------- 水电网气房费 (utility bills) ----------------
+
+# Reminder goes out this many days before the due date.
+UTILITY_REMINDER_DAYS_AHEAD = 3
+
+UTILITY_BILL_STATUSES = {"pending", "paid"}
+
+
+def list_utility_bills(db: Session):
+    return db.scalars(
+        _active_stmt(UtilityBill).order_by(UtilityBill.due_date.desc(), UtilityBill.id.desc())
+    ).all()
+
+
+def create_utility_bill(payload: UtilityBillCreate, db: Session, operator: str = "admin"):
+    if not _get_active(db, Dorm, payload.dorm_id):
+        raise HTTPException(status_code=400, detail="宿舍不存在")
+    if payload.status not in UTILITY_BILL_STATUSES:
+        raise HTTPException(status_code=400, detail="状态仅支持 pending/paid")
+    bill = UtilityBill(**payload.model_dump())
+    db.add(bill)
+    db.flush()
+    _audit(
+        db,
+        entity_type="utility_bill",
+        entity_id=bill.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(bill),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(bill)
+    return bill
+
+
+def update_utility_bill(bill_id: int, payload: UtilityBillUpdate, db: Session, operator: str = "admin"):
+    bill = _get_active(db, UtilityBill, bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="缴费记录不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if "dorm_id" in values and not _get_active(db, Dorm, values["dorm_id"]):
+        raise HTTPException(status_code=400, detail="宿舍不存在")
+    if "status" in values and values["status"] not in UTILITY_BILL_STATUSES:
+        raise HTTPException(status_code=400, detail="状态仅支持 pending/paid")
+    before = _model_data(bill)
+    for key, value in values.items():
+        setattr(bill, key, value)
+    # A moved due date re-arms the reminder.
+    if "due_date" in values and values["due_date"] != before.get("due_date"):
+        bill.reminded_on = None
+    db.flush()
+    _audit(
+        db,
+        entity_type="utility_bill",
+        entity_id=bill.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(bill),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(bill)
+    return bill
+
+
+def delete_utility_bill(bill_id: int, db: Session, operator: str = "admin"):
+    bill = _get_active(db, UtilityBill, bill_id)
+    if not bill:
+        raise HTTPException(status_code=404, detail="缴费记录不存在")
+    before = _model_data(bill)
+    bill.is_deleted = True
+    db.flush()
+    _audit(
+        db,
+        entity_type="utility_bill",
+        entity_id=bill.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(bill),
+        operator=operator,
+    )
+    db.commit()
+    return {"deleted": True}
+
+
+def list_utility_accounts(db: Session):
+    return db.scalars(
+        _active_stmt(UtilityAccount).order_by(UtilityAccount.dorm_id, UtilityAccount.fee_type, UtilityAccount.id)
+    ).all()
+
+
+def create_utility_account(payload: UtilityAccountCreate, db: Session, operator: str = "admin"):
+    if not _get_active(db, Dorm, payload.dorm_id):
+        raise HTTPException(status_code=400, detail="宿舍不存在")
+    account = UtilityAccount(**payload.model_dump())
+    db.add(account)
+    db.flush()
+    _audit(
+        db,
+        entity_type="utility_account",
+        entity_id=account.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(account),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def update_utility_account(account_id: int, payload: UtilityAccountUpdate, db: Session, operator: str = "admin"):
+    account = _get_active(db, UtilityAccount, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="缴费账户不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if "dorm_id" in values and not _get_active(db, Dorm, values["dorm_id"]):
+        raise HTTPException(status_code=400, detail="宿舍不存在")
+    if "account_number" in values and not (values["account_number"] or "").strip():
+        raise HTTPException(status_code=400, detail="账号不能为空")
+    before = _model_data(account)
+    for key, value in values.items():
+        setattr(account, key, value)
+    db.flush()
+    _audit(
+        db,
+        entity_type="utility_account",
+        entity_id=account.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(account),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def delete_utility_account(account_id: int, db: Session, operator: str = "admin"):
+    account = _get_active(db, UtilityAccount, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="缴费账户不存在")
+    before = _model_data(account)
+    account.is_deleted = True
+    db.flush()
+    _audit(
+        db,
+        entity_type="utility_account",
+        entity_id=account.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(account),
+        operator=operator,
+    )
+    db.commit()
+    return {"deleted": True}
+
+
+def list_utility_bill_recipients(db: Session):
+    recipients = db.scalars(_active_stmt(UtilityBillRecipient)).all()
+    users = {user.id: user for user in db.scalars(_active_stmt(User)).all()}
+    result = []
+    for recipient in recipients:
+        user = users.get(recipient.user_id)
+        if not user:
+            continue
+        result.append(
+            {
+                "user_id": user.id,
+                "username": user.username,
+                "display_name": user.display_name,
+                "has_dingtalk": bool(user.dingtalk_userid),
+            }
+        )
+    return result
+
+
+def replace_utility_bill_recipients(payload: UtilityBillRecipientsReplace, db: Session, operator: str = "admin"):
+    wanted = set(payload.user_ids)
+    for user_id in wanted:
+        if not _get_active(db, User, user_id):
+            raise HTTPException(status_code=400, detail=f"用户 {user_id} 不存在")
+    # Soft-delete removed recipients; resurrect or create the wanted ones
+    # (the unique constraint on user_id also covers soft-deleted rows).
+    existing = db.scalars(select(UtilityBillRecipient)).all()
+    for row in existing:
+        if row.user_id in wanted:
+            row.is_deleted = False
+            wanted.discard(row.user_id)
+        else:
+            row.is_deleted = True
+    for user_id in wanted:
+        db.add(UtilityBillRecipient(user_id=user_id))
+    db.flush()
+    _audit(
+        db,
+        entity_type="utility_bill_recipients",
+        entity_id="global",
+        action="update",
+        before_data=None,
+        after_data={"user_ids": sorted(payload.user_ids)},
+        operator=operator,
+    )
+    db.commit()
+    return list_utility_bill_recipients(db)
+
+
+def _utility_recipient_dingtalk_ids(db: Session) -> list[str]:
+    users = {user.id: user for user in db.scalars(_active_stmt(User)).all()}
+    ids = []
+    for recipient in db.scalars(_active_stmt(UtilityBillRecipient)).all():
+        user = users.get(recipient.user_id)
+        if user and user.dingtalk_userid:
+            ids.append(user.dingtalk_userid)
+    return ids
+
+
+def run_utility_bill_reminders(db: Session) -> dict:
+    """Send one DingTalk reminder per pending bill due within the next 3 days.
+
+    Idempotent: each bill is reminded once (reminded_on guard); editing the due
+    date re-arms it. Called by the background scheduler and the manual endpoint.
+    """
+    from backend.services import dingtalk
+
+    today = local_today()
+    window_end = today + timedelta(days=UTILITY_REMINDER_DAYS_AHEAD)
+    bills = db.scalars(
+        _active_stmt(UtilityBill)
+        .where(
+            UtilityBill.status == "pending",
+            UtilityBill.reminded_on.is_(None),
+            UtilityBill.due_date >= today,
+            UtilityBill.due_date <= window_end,
+        )
+        .order_by(UtilityBill.due_date)
+    ).all()
+    if not bills:
+        return {"sent": 0, "reason": "没有需要提醒的缴费项"}
+    if not dingtalk.can_send_messages():
+        return {"sent": 0, "reason": "钉钉消息未配置（缺少 DINGTALK_AGENT_ID 等环境变量）"}
+    userids = _utility_recipient_dingtalk_ids(db)
+    if not userids:
+        return {"sent": 0, "reason": "没有绑定钉钉的提醒接收人"}
+
+    dorm_names = {dorm.id: dorm.name for dorm in db.scalars(_active_stmt(Dorm)).all()}
+    lines = ["【宿舍缴费提醒】以下费用即将到期："]
+    for bill in bills:
+        days = (bill.due_date - today).days
+        when = "今天到期" if days == 0 else f"{days} 天后到期"
+        line = f"· {dorm_names.get(bill.dorm_id, '未知宿舍')} {bill.fee_type}：{bill.due_date.isoformat()}（{when}）"
+        if bill.account:
+            line += f"，账号 {bill.account}"
+        if bill.amount is not None:
+            line += f"，金额 {bill.amount:g}"
+        if bill.note:
+            line += f"，备注：{bill.note}"
+        lines.append(line)
+    lines.append("请及时缴纳。")
+    dingtalk.send_work_message(userids, "\n".join(lines))
+    for bill in bills:
+        bill.reminded_on = today
+    db.commit()
+    return {"sent": len(bills), "recipients": len(userids)}
+
+
+def send_utility_bill_test_message(db: Session) -> dict:
+    from backend.services import dingtalk
+
+    userids = _utility_recipient_dingtalk_ids(db)
+    if not userids:
+        raise HTTPException(
+            status_code=400,
+            detail="没有绑定钉钉的提醒接收人：请先勾选接收人，且接收人需要用钉钉登录过本系统一次以完成绑定",
+        )
+    return dingtalk.send_work_message(
+        userids, f"【宿舍缴费提醒】这是一条测试消息（{local_today().isoformat()}），钉钉提醒配置成功。"
+    )
 
 
 def seed_default_dictionaries(db: Session):

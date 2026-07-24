@@ -1,0 +1,435 @@
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
+import { api } from "../api";
+import { useAuth } from "../auth/AuthContext";
+import { DataTable } from "../components/DataTable";
+import { ErrorDialog } from "../components/ErrorDialog";
+import {
+  deleteButtonClass,
+  editButtonClass,
+  fieldControlClass,
+  FormField,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from "../components/FormField";
+import { useDictionaries } from "../hooks/useDictionaries";
+import type { Dorm, User, UtilityBill, UtilityBillRecipient } from "../types";
+import { todayISO } from "../utils/date";
+
+type BillFormState = {
+  dorm_id: string;
+  fee_type: string;
+  due_date: string;
+  account: string;
+  amount: string;
+  note: string;
+};
+
+const emptyForm: BillFormState = {
+  dorm_id: "",
+  fee_type: "房租",
+  due_date: "",
+  account: "",
+  amount: "",
+  note: "",
+};
+
+
+export function UtilityBillsPage() {
+  const { canEdit, isAdmin } = useAuth();
+  const dictionaries = useDictionaries();
+  const [rows, setRows] = useState<UtilityBill[]>([]);
+  const [dorms, setDorms] = useState<Dorm[]>([]);
+  const [recipients, setRecipients] = useState<UtilityBillRecipient[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [form, setForm] = useState<BillFormState>(emptyForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
+  const [savingRecipients, setSavingRecipients] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [billData, dormData, recipientData] = await Promise.all([
+        api.getUtilityBills(),
+        api.getDorms(),
+        api.getUtilityBillRecipients(),
+      ]);
+      setRows(billData);
+      setDorms(dormData);
+      setRecipients(recipientData);
+      setSelectedUserIds(recipientData.map((item) => item.user_id));
+      if (canEdit) {
+        // Full user list is admin-only; editors still see current recipients.
+        try {
+          setUsers(await api.getUsers());
+        } catch {
+          setUsers([]);
+        }
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-dismiss the green notice bar.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const payloadFromForm = () => ({
+    dorm_id: Number(form.dorm_id),
+    fee_type: form.fee_type,
+    due_date: form.due_date,
+    account: form.account.trim() || null,
+    amount: form.amount === "" ? null : Number(form.amount),
+    note: form.note.trim() || null,
+  });
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (editingId && !confirm("确认保存修改？")) return;
+    setError("");
+    try {
+      if (editingId) {
+        await api.updateUtilityBill(editingId, payloadFromForm());
+      } else {
+        await api.createUtilityBill(payloadFromForm());
+      }
+      setEditingId(null);
+      setForm(emptyForm);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const onEdit = (row: UtilityBill) => {
+    setEditingId(row.id);
+    setForm({
+      dorm_id: String(row.dorm_id),
+      fee_type: row.fee_type,
+      due_date: row.due_date,
+      account: row.account ?? "",
+      amount: row.amount === null ? "" : String(row.amount),
+      note: row.note ?? "",
+    });
+  };
+
+  const onDelete = async (row: UtilityBill) => {
+    if (!confirm(`确认删除 ${dormMap.get(row.dorm_id) ?? ""} ${row.fee_type}（${row.due_date}）？`)) return;
+    setError("");
+    try {
+      await api.deleteUtilityBill(row.id);
+      if (editingId === row.id) {
+        setEditingId(null);
+        setForm(emptyForm);
+      }
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const onSaveRecipients = async () => {
+    setError("");
+    setSavingRecipients(true);
+    try {
+      const saved = await api.replaceUtilityBillRecipients(selectedUserIds);
+      setRecipients(saved);
+      setSelectedUserIds(saved.map((item) => item.user_id));
+      setNotice("提醒接收人已保存");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingRecipients(false);
+    }
+  };
+
+  const onSendTest = async () => {
+    setError("");
+    setSendingTest(true);
+    try {
+      await api.sendUtilityBillTestMessage();
+      setNotice("测试消息已发送，请在钉钉查看");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
+  const dormMap = useMemo(() => new Map(dorms.map((dorm) => [dorm.id, dorm.name])), [dorms]);
+  const today = todayISO();
+
+  const daysUntil = (dueDate: string) =>
+    Math.round((new Date(`${dueDate}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);
+
+  const dueBadge = (row: UtilityBill) => {
+    const days = daysUntil(row.due_date);
+    if (days < 0) return <span className="font-semibold text-red-600">已逾期 {-days} 天</span>;
+    if (days === 0) return <span className="font-semibold text-red-600">今天到期</span>;
+    if (days <= 3) return <span className="font-semibold text-amber-600">{days} 天后</span>;
+    return <span className="text-slate-600">{days} 天后</span>;
+  };
+
+  const filteredRows = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (monthFilter && !row.due_date.startsWith(monthFilter)) return false;
+      if (!keyword) return true;
+      return [
+        dormMap.get(row.dorm_id),
+        row.fee_type,
+        row.account,
+        row.due_date,
+        row.amount,
+        row.note,
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .some((value) => String(value).toLowerCase().includes(keyword));
+    });
+  }, [dormMap, monthFilter, rows, search]);
+
+  const toggleUser = (userId: number) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold">水电网气房费</h2>
+
+      {canEdit ? (
+        <form
+          onSubmit={onSubmit}
+          className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-3"
+        >
+          <FormField label="宿舍" required>
+            <select
+              className={fieldControlClass}
+              value={form.dorm_id}
+              onChange={(e) => setForm((f) => ({ ...f, dorm_id: e.target.value }))}
+              required
+            >
+              <option value="">选择宿舍</option>
+              {dorms.map((dorm) => (
+                <option key={dorm.id} value={dorm.id}>
+                  {dorm.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="缴费类型" required>
+            <select
+              className={fieldControlClass}
+              value={form.fee_type}
+              onChange={(e) => setForm((f) => ({ ...f, fee_type: e.target.value }))}
+              required
+            >
+              {dictionaries.feeTypes.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="缴费日期" required>
+            <input
+              className={fieldControlClass}
+              type="date"
+              value={form.due_date}
+              onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
+              required
+            />
+          </FormField>
+          <FormField label="宿舍账号">
+            <input
+              className={fieldControlClass}
+              value={form.account}
+              onChange={(e) => setForm((f) => ({ ...f, account: e.target.value }))}
+              placeholder="手写账号备注，选填"
+            />
+          </FormField>
+          <FormField label="金额">
+            <input
+              className={fieldControlClass}
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+              placeholder="选填"
+            />
+          </FormField>
+          <FormField label="备注">
+            <input
+              className={fieldControlClass}
+              value={form.note}
+              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+            />
+          </FormField>
+          <button className={primaryButtonClass} type="submit">
+            {editingId ? "保存缴费项" : "新增缴费项"}
+          </button>
+          {editingId ? (
+            <button
+              className={secondaryButtonClass}
+              type="button"
+              onClick={() => {
+                setEditingId(null);
+                setForm(emptyForm);
+              }}
+            >
+              取消编辑
+            </button>
+          ) : null}
+        </form>
+      ) : null}
+
+      <ErrorDialog message={error} onClose={() => setError("")} />
+      {notice ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-700">{notice}</div>
+      ) : null}
+
+      {loading ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 md:flex-row">
+            <input
+              className={fieldControlClass}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="搜索缴费记录"
+            />
+            <input
+              className={`${fieldControlClass} md:w-48`}
+              type="month"
+              value={monthFilter}
+              onChange={(event) => setMonthFilter(event.target.value)}
+              title="按月份筛选缴费日期"
+            />
+          </div>
+          <DataTable
+            rows={filteredRows}
+            rowKey={(row) => row.id}
+            emptyText="没有匹配记录"
+            columns={[
+              { header: "宿舍", cell: (row) => dormMap.get(row.dorm_id) ?? "Unknown" },
+              { header: "类型", cell: (row) => row.fee_type },
+              { header: "宿舍账号", cell: (row) => row.account ?? "-" },
+              { header: "缴费日期", cell: (row) => row.due_date },
+              { header: "距到期", cell: dueBadge },
+              { header: "金额", cell: (row) => (row.amount === null ? "-" : row.amount) },
+              {
+                header: "钉钉提醒",
+                cell: (row) =>
+                  row.reminded_on ? (
+                    <span className="text-emerald-700">已提醒 {row.reminded_on}</span>
+                  ) : (
+                    <span className="text-slate-400">未提醒</span>
+                  ),
+              },
+              { header: "备注", cell: (row) => row.note ?? "-" },
+              {
+                header: "操作",
+                cell: (row) => (
+                  <div className="flex flex-wrap gap-2">
+                    {canEdit ? (
+                      <button className={editButtonClass} type="button" onClick={() => onEdit(row)}>
+                        修改
+                      </button>
+                    ) : null}
+                    {canEdit ? (
+                      <button className={deleteButtonClass} type="button" onClick={() => void onDelete(row)}>
+                        删除
+                      </button>
+                    ) : null}
+                    {!canEdit ? <span className="text-slate-400">-</span> : null}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-base font-semibold">钉钉提醒设置</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          系统会在缴费日期<span className="font-semibold text-slate-700">前 3 天</span>
+          自动给下方接收人发送钉钉工作通知（每条缴费项只提醒一次，修改日期后会重新提醒）。
+          接收人需要用钉钉登录过本系统一次，完成钉钉账号绑定。
+        </p>
+        {isAdmin && users.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {users.map((user) => {
+              const selected = selectedUserIds.includes(user.id);
+              return (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => toggleUser(user.id)}
+                  className={`rounded-full border px-3 py-1 text-sm transition ${
+                    selected
+                      ? "border-indigo-300 bg-indigo-50 font-medium text-indigo-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {user.display_name || user.username}
+                  {user.dingtalk_userid ? " ✓钉钉" : " （未绑定钉钉）"}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-3 text-sm text-slate-600">
+            当前接收人：
+            {recipients.length === 0
+              ? "未设置"
+              : recipients
+                  .map((item) => `${item.display_name || item.username}${item.has_dingtalk ? "" : "（未绑定钉钉）"}`)
+                  .join("、")}
+          </div>
+        )}
+        {isAdmin ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              className={primaryButtonClass}
+              type="button"
+              disabled={savingRecipients}
+              onClick={() => void onSaveRecipients()}
+            >
+              {savingRecipients ? "保存中..." : "保存接收人"}
+            </button>
+            <button
+              className={secondaryButtonClass}
+              type="button"
+              disabled={sendingTest}
+              onClick={() => void onSendTest()}
+            >
+              {sendingTest ? "发送中..." : "发送测试消息"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}

@@ -107,6 +107,52 @@ class AllocationUpdate(BaseModel):
     note: Optional[str] = None
 
 
+class UtilityBillCreate(BaseModel):
+    dorm_id: int
+    fee_type: str
+    due_date: date
+    account: Optional[str] = None
+    amount: Optional[float] = None
+    note: Optional[str] = None
+    status: str = "pending"
+
+
+class UtilityBillUpdate(BaseModel):
+    dorm_id: Optional[int] = None
+    fee_type: Optional[str] = None
+    due_date: Optional[date] = None
+    account: Optional[str] = None
+    amount: Optional[float] = None
+    note: Optional[str] = None
+    status: Optional[str] = None
+
+
+class UtilityBillRecipientsReplace(BaseModel):
+    user_ids: list[int]
+
+
+class UtilityAccountCreate(BaseModel):
+    dorm_id: int
+    fee_type: str
+    account_number: str
+    provider: Optional[str] = None
+    login_username: Optional[str] = None
+    login_password: Optional[str] = None
+    website: Optional[str] = None
+    note: Optional[str] = None
+
+
+class UtilityAccountUpdate(BaseModel):
+    dorm_id: Optional[int] = None
+    fee_type: Optional[str] = None
+    account_number: Optional[str] = None
+    provider: Optional[str] = None
+    login_username: Optional[str] = None
+    login_password: Optional[str] = None
+    website: Optional[str] = None
+    note: Optional[str] = None
+
+
 class VehicleCreate(BaseModel):
     plate_number: str
     seat_count: int = Field(gt=0)

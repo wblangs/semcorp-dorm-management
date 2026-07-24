@@ -26,6 +26,9 @@ const emptyForm: DormFormState = {
   status: "active",
 };
 
+// HIDDEN: 车辆模块暂时隐藏，宿舍车辆列跟随隐藏（恢复时改为 true）
+const SHOW_DORM_VEHICLES = false;
+
 export function DormsPage() {
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
@@ -44,10 +47,10 @@ export function DormsPage() {
     try {
       setLoading(true);
 
-      // CHANGED: 同时读取宿舍和车辆
+      // CHANGED: 同时读取宿舍和车辆（车辆模块隐藏时跳过请求）
       const [dormData, vehicleData] = await Promise.all([
         api.getDorms(),
-        api.getVehicles(),
+        SHOW_DORM_VEHICLES ? api.getVehicles() : Promise.resolve([] as Vehicle[]),
       ]);
 
       setRows(dormData);
@@ -225,14 +228,18 @@ export function DormsPage() {
               { header: "类型", cell: (row) => row.type },
               { header: "地址", cell: (row) => row.address },
 
-              // ADDED: 宿舍车辆列
-              {
-                header: "宿舍车辆",
-                cell: (row) => {
-                  const plates = dormVehicleMap.get(row.id) ?? [];
-                  return plates.length > 0 ? plates.join(", ") : "-";
-                },
-              },
+              // ADDED: 宿舍车辆列（车辆模块隐藏时不显示）
+              ...(SHOW_DORM_VEHICLES
+                ? [
+                    {
+                      header: "宿舍车辆",
+                      cell: (row: Dorm) => {
+                        const plates = dormVehicleMap.get(row.id) ?? [];
+                        return plates.length > 0 ? plates.join(", ") : "-";
+                      },
+                    },
+                  ]
+                : []),
 
               { header: "租期开始", cell: (row) => row.lease_start_date ?? "-" },
               { header: "租期结束", cell: (row) => row.lease_end_date ?? "-" },

@@ -125,6 +125,37 @@ export type Vehicle = {
   status: string;
 };
 
+export type UtilityBill = {
+  id: number;
+  dorm_id: number;
+  fee_type: string;
+  due_date: string;
+  account: string | null;
+  amount: number | null;
+  note: string | null;
+  status: "pending" | "paid";
+  reminded_on: string | null;
+};
+
+export type UtilityAccount = {
+  id: number;
+  dorm_id: number;
+  fee_type: string;
+  provider: string | null;
+  account_number: string;
+  login_username: string | null;
+  login_password: string | null;
+  website: string | null;
+  note: string | null;
+};
+
+export type UtilityBillRecipient = {
+  user_id: number;
+  username: string;
+  display_name: string | null;
+  has_dingtalk: boolean;
+};
+
 export type StayPerson = {
   id: number;
   chinese_name: string;

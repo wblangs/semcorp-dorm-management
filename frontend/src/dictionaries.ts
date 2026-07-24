@@ -6,6 +6,7 @@ export type DictionaryKey =
   | "departments"
   | "visaTypes"
   | "vehicleTypes"
+  | "feeTypes"
   | "statuses";
 
 export type DictionaryOption = {
@@ -24,6 +25,7 @@ export const dictionaryLabels: Record<DictionaryKey, string> = {
   departments: "部门",
   visaTypes: "签证类型",
   vehicleTypes: "车辆类型",
+  feeTypes: "缴费类型",
   statuses: "状态",
 };
 
@@ -75,6 +77,13 @@ export const defaultDictionaries: DictionaryState = {
     { label: "Van", value: "Van" },
     { label: "Pickup", value: "Pickup" },
     { label: "Other", value: "Other" },
+  ],
+  feeTypes: [
+    { label: "房租", value: "房租" },
+    { label: "水费", value: "水费" },
+    { label: "电费", value: "电费" },
+    { label: "网费", value: "网费" },
+    { label: "燃气费", value: "燃气费" },
   ],
   statuses: [
     { label: "active", value: "active" },

@@ -26,6 +26,11 @@ from backend.schemas import (
     UserCreate,
     UserPasswordReset,
     UserUpdate,
+    UtilityAccountCreate,
+    UtilityAccountUpdate,
+    UtilityBillCreate,
+    UtilityBillRecipientsReplace,
+    UtilityBillUpdate,
     VehicleCreate,
     VehicleUpdate,
 )
@@ -411,6 +416,97 @@ def update_vehicle(
 @router.delete("/vehicles/{vehicle_id}")
 def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     return management.delete_vehicle(vehicle_id, db, operator=current_user.username)
+
+
+@router.get("/utility-bills")
+def list_utility_bills(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return management.list_utility_bills(db)
+
+
+@router.post("/utility-bills")
+def create_utility_bill(
+    payload: UtilityBillCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.create_utility_bill(payload, db, operator=current_user.username)
+
+
+@router.put("/utility-bills/{bill_id}")
+def update_utility_bill(
+    bill_id: int,
+    payload: UtilityBillUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.update_utility_bill(bill_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/utility-bills/{bill_id}")
+def delete_utility_bill(bill_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
+    return management.delete_utility_bill(bill_id, db, operator=current_user.username)
+
+
+@router.get("/utility-accounts")
+def list_utility_accounts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return management.list_utility_accounts(db)
+
+
+@router.post("/utility-accounts")
+def create_utility_account(
+    payload: UtilityAccountCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.create_utility_account(payload, db, operator=current_user.username)
+
+
+@router.put("/utility-accounts/{account_id}")
+def update_utility_account(
+    account_id: int,
+    payload: UtilityAccountUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.update_utility_account(account_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/utility-accounts/{account_id}")
+def delete_utility_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.delete_utility_account(account_id, db, operator=current_user.username)
+
+
+@router.get("/utility-bills/recipients/list")
+def list_utility_bill_recipients(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return management.list_utility_bill_recipients(db)
+
+
+@router.put("/utility-bills/recipients/list")
+def replace_utility_bill_recipients(
+    payload: UtilityBillRecipientsReplace,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return management.replace_utility_bill_recipients(payload, db, operator=current_user.username)
+
+
+@router.post("/utility-bills/reminders/run")
+def run_utility_bill_reminders(db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
+    _ = current_user
+    return management.run_utility_bill_reminders(db)
+
+
+@router.post("/utility-bills/reminders/test")
+def send_utility_bill_test_message(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    _ = current_user
+    return management.send_utility_bill_test_message(db)
 
 
 @router.get("/dashboard")

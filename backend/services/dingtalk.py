@@ -60,6 +60,31 @@ def _get_access_token() -> str:
     return data["access_token"]
 
 
+def can_send_messages() -> bool:
+    """Work notifications (工作通知) additionally require the app's AgentId."""
+    return is_configured() and bool(settings.dingtalk_agent_id)
+
+
+def send_work_message(userids: list[str], content: str) -> dict:
+    """Send a DingTalk work notification (text) to the given DingTalk userids."""
+    if not can_send_messages():
+        raise HTTPException(status_code=400, detail="钉钉消息未配置（需要 DINGTALK_AGENT_ID 等环境变量）")
+    if not userids:
+        raise HTTPException(status_code=400, detail="没有可接收钉钉消息的用户")
+    token = _get_access_token()
+    data = _http_post(
+        f"https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token={urllib.parse.quote(token)}",
+        {
+            "agent_id": settings.dingtalk_agent_id,
+            "userid_list": ",".join(userids),
+            "msg": {"msgtype": "text", "text": {"content": content}},
+        },
+    )
+    if data.get("errcode") != 0:
+        raise HTTPException(status_code=502, detail=f"钉钉消息发送失败: {data.get('errmsg')}")
+    return {"sent": True, "task_id": data.get("task_id")}
+
+
 def get_user_by_auth_code(auth_code: str) -> dict:
     """Exchange a JSAPI authCode for {userid, name}."""
     token = _get_access_token()

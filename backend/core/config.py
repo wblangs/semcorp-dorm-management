@@ -21,6 +21,8 @@ class Settings:
     dingtalk_client_id: str = os.getenv("DINGTALK_CLIENT_ID", "")
     dingtalk_client_secret: str = os.getenv("DINGTALK_CLIENT_SECRET", "")
     dingtalk_corp_id: str = os.getenv("DINGTALK_CORP_ID", "")
+    # DingTalk 应用 AgentId — required additionally for sending work notifications (工作通知).
+    dingtalk_agent_id: str = os.getenv("DINGTALK_AGENT_ID", "")
     app_version: str = "v0.7"
 
     @cached_property
@@ -57,6 +59,7 @@ class Settings:
             dingtalk_client_id=source.get("DINGTALK_CLIENT_ID", ""),
             dingtalk_client_secret=source.get("DINGTALK_CLIENT_SECRET", ""),
             dingtalk_corp_id=source.get("DINGTALK_CORP_ID", ""),
+            dingtalk_agent_id=source.get("DINGTALK_AGENT_ID", ""),
         )
 
 

@@ -13,6 +13,9 @@ import type {
   StayRiskPayload,
   SystemInfo,
   User,
+  UtilityAccount,
+  UtilityBill,
+  UtilityBillRecipient,
   Vehicle,
 } from "../types";
 
@@ -26,6 +29,9 @@ type CreateRoomPayload = Omit<
 >;
 type NewPerson = Omit<Person, "id">;
 type NewVehicle = Omit<Vehicle, "id">;
+// status stays backend-side (defaults to pending); the UI no longer sets it.
+type NewUtilityBill = Omit<UtilityBill, "id" | "reminded_on" | "status">;
+type NewUtilityAccount = Omit<UtilityAccount, "id">;
 
 export const api = {
   login: (payload: { username: string; password: string }) =>
@@ -164,4 +170,31 @@ export const api = {
   updateVehicle: (id: number, payload: NewVehicle) =>
     apiRequest<Vehicle>(`/api/vehicles/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteVehicle: (id: number) => apiRequest<{ deleted: boolean }>(`/api/vehicles/${id}`, { method: "DELETE" }),
+
+  getUtilityBills: () => apiRequest<UtilityBill[]>("/api/utility-bills"),
+  createUtilityBill: (payload: NewUtilityBill) =>
+    apiRequest<UtilityBill>("/api/utility-bills", { method: "POST", body: JSON.stringify(payload) }),
+  updateUtilityBill: (id: number, payload: Partial<NewUtilityBill>) =>
+    apiRequest<UtilityBill>(`/api/utility-bills/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteUtilityBill: (id: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/utility-bills/${id}`, { method: "DELETE" }),
+  getUtilityAccounts: () => apiRequest<UtilityAccount[]>("/api/utility-accounts"),
+  createUtilityAccount: (payload: NewUtilityAccount) =>
+    apiRequest<UtilityAccount>("/api/utility-accounts", { method: "POST", body: JSON.stringify(payload) }),
+  updateUtilityAccount: (id: number, payload: Partial<NewUtilityAccount>) =>
+    apiRequest<UtilityAccount>(`/api/utility-accounts/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteUtilityAccount: (id: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/utility-accounts/${id}`, { method: "DELETE" }),
+  getUtilityBillRecipients: () => apiRequest<UtilityBillRecipient[]>("/api/utility-bills/recipients/list"),
+  replaceUtilityBillRecipients: (user_ids: number[]) =>
+    apiRequest<UtilityBillRecipient[]>("/api/utility-bills/recipients/list", {
+      method: "PUT",
+      body: JSON.stringify({ user_ids }),
+    }),
+  runUtilityBillReminders: () =>
+    apiRequest<{ sent: number; reason?: string; recipients?: number }>("/api/utility-bills/reminders/run", {
+      method: "POST",
+    }),
+  sendUtilityBillTestMessage: () =>
+    apiRequest<{ sent: boolean }>("/api/utility-bills/reminders/test", { method: "POST" }),
 };

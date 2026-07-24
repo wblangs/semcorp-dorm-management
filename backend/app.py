@@ -1,3 +1,6 @@
+import logging
+import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -9,7 +12,11 @@ from backend.api import router as api_router
 from backend.core.config import settings
 from backend.database.session import engine, run_lightweight_migrations, Session
 from backend.models import Base
-from backend.services.management import backfill_room_items, seed_default_dictionaries
+from backend.services.management import (
+    backfill_room_items,
+    run_utility_bill_reminders,
+    seed_default_dictionaries,
+)
 
 app = FastAPI(title="外派员工宿舍与通勤管理系统")
 
@@ -67,3 +74,24 @@ run_lightweight_migrations()
 with Session(engine) as session:
     seed_default_dictionaries(session)
     backfill_room_items(session)
+
+
+# 水电网气房费提醒: scan every 30 minutes and DingTalk-notify configured
+# recipients about bills due within the next 3 days (idempotent per bill).
+UTILITY_REMINDER_INTERVAL_SECONDS = 30 * 60
+
+
+def _utility_bill_reminder_loop() -> None:
+    logger = logging.getLogger("uvicorn.error")
+    while True:
+        try:
+            with Session(engine) as session:
+                result = run_utility_bill_reminders(session)
+            if result.get("sent"):
+                logger.info("utility bill reminders sent: %s", result)
+        except Exception:  # noqa: BLE001 - keep the scheduler alive
+            logger.exception("utility bill reminder run failed")
+        time.sleep(UTILITY_REMINDER_INTERVAL_SECONDS)
+
+
+threading.Thread(target=_utility_bill_reminder_loop, daemon=True, name="utility-bill-reminder").start()

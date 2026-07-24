@@ -88,6 +88,17 @@ def run_lightweight_migrations() -> None:
             if "temp_leave_end" not in allocation_columns:
                 safe_add_column(conn, "ALTER TABLE allocations ADD COLUMN temp_leave_end DATE")
 
+        utility_bill_table_exists = conn.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table' AND name='utility_bills'")
+        ).fetchone()
+        if utility_bill_table_exists:
+            utility_bill_columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(utility_bills)")).fetchall()
+            }
+            if "account" not in utility_bill_columns:
+                safe_add_column(conn, "ALTER TABLE utility_bills ADD COLUMN account VARCHAR(200)")
+
         stay_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='stays'")
         ).fetchone()
