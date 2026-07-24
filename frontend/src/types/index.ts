@@ -134,6 +134,7 @@ export type UtilityBill = {
   amount: number | null;
   note: string | null;
   status: "pending" | "paid";
+  remind_enabled: boolean;
   reminded_on: string | null;
 };
 
@@ -209,6 +210,7 @@ export type User = {
   status: "active" | "disabled";
   last_login_at: string | null;
   dingtalk_userid: string | null;
+  receive_bill_reminders: boolean;
   created_at: string | null;
   updated_at: string | null;
 };

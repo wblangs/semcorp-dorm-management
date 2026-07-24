@@ -58,6 +58,7 @@ export const api = {
       role?: "admin" | "user" | "viewer";
       status?: "active" | "disabled";
       dingtalk_userid?: string | null;
+      receive_bill_reminders?: boolean;
     },
   ) => apiRequest<User>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteUser: (id: number) => apiRequest<{ deleted: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
@@ -186,11 +187,6 @@ export const api = {
   deleteUtilityAccount: (id: number) =>
     apiRequest<{ deleted: boolean }>(`/api/utility-accounts/${id}`, { method: "DELETE" }),
   getUtilityBillRecipients: () => apiRequest<UtilityBillRecipient[]>("/api/utility-bills/recipients/list"),
-  replaceUtilityBillRecipients: (user_ids: number[]) =>
-    apiRequest<UtilityBillRecipient[]>("/api/utility-bills/recipients/list", {
-      method: "PUT",
-      body: JSON.stringify({ user_ids }),
-    }),
   runUtilityBillReminders: () =>
     apiRequest<{ sent: number; reason?: string; recipients?: number }>("/api/utility-bills/reminders/run", {
       method: "POST",

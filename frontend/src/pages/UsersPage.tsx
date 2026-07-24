@@ -20,6 +20,7 @@ type UserFormState = {
   role: "admin" | "user" | "viewer";
   status: "active" | "disabled";
   dingtalk_userid: string;
+  receive_bill_reminders: boolean;
 };
 
 const emptyForm: UserFormState = {
@@ -29,6 +30,7 @@ const emptyForm: UserFormState = {
   role: "user",
   status: "active",
   dingtalk_userid: "",
+  receive_bill_reminders: false,
 };
 
 export function UsersPage() {
@@ -57,6 +59,7 @@ export function UsersPage() {
       role: user.role,
       status: user.status,
       dingtalk_userid: user.dingtalk_userid ?? "",
+      receive_bill_reminders: user.receive_bill_reminders,
     });
     setResetPassword("");
     setError("");
@@ -98,6 +101,7 @@ export function UsersPage() {
           role: form.role,
           status: form.status,
           dingtalk_userid: form.dingtalk_userid.trim() || undefined,
+          receive_bill_reminders: form.receive_bill_reminders,
         });
         if (resetPassword) {
           await api.resetUserPassword(editingId, resetPassword);
@@ -184,6 +188,18 @@ export function UsersPage() {
               />
             </FormField>
           ) : null}
+          {editingId ? (
+            <FormField label="接收缴费钉钉提醒">
+              <select
+                className={fieldControlClass}
+                value={form.receive_bill_reminders ? "yes" : "no"}
+                onChange={(event) => setForm({ ...form, receive_bill_reminders: event.target.value === "yes" })}
+              >
+                <option value="no">不接收</option>
+                <option value="yes">接收</option>
+              </select>
+            </FormField>
+          ) : null}
           <div className="flex items-end gap-2">
             <button className={primaryButtonClass}>{editingId ? "保存用户" : "新增用户"}</button>
             {editingId ? (
@@ -211,6 +227,17 @@ export function UsersPage() {
           { header: "角色", cell: (user) => user.role },
           { header: "状态", cell: (user) => user.status },
           { header: "钉钉绑定", cell: (user) => (user.dingtalk_userid ? "已绑定" : "-") },
+          {
+            header: "缴费提醒",
+            cell: (user) =>
+              user.receive_bill_reminders ? (
+                <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-sm font-medium text-emerald-700">
+                  接收
+                </span>
+              ) : (
+                <span className="text-slate-400">-</span>
+              ),
+          },
           { header: "最后登录", cell: (user) => user.last_login_at || "-" },
           {
             header: "操作",

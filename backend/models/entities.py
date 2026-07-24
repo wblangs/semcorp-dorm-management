@@ -19,6 +19,8 @@ class User(TimestampSoftDeleteMixin, Base):
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # DingTalk userid for 免登 (auto-login) account linking.
     dingtalk_userid: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
+    # 是否接收水电房费的钉钉缴费提醒 (managed on the Users page).
+    receive_bill_reminders: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class Dorm(TimestampSoftDeleteMixin, Base):
@@ -154,6 +156,8 @@ class UtilityBill(TimestampSoftDeleteMixin, Base):
     amount: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     status: Mapped[Literal["pending", "paid"]] = mapped_column(String(20), default="pending", nullable=False)
+    # 是否需要提醒: per-bill switch for the DingTalk due-date reminder.
+    remind_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Date the DingTalk reminder was sent; None until sent (also the idempotency guard).
     reminded_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 

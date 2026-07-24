@@ -115,6 +115,7 @@ class UtilityBillCreate(BaseModel):
     amount: Optional[float] = None
     note: Optional[str] = None
     status: str = "pending"
+    remind_enabled: bool = True
 
 
 class UtilityBillUpdate(BaseModel):
@@ -125,10 +126,7 @@ class UtilityBillUpdate(BaseModel):
     amount: Optional[float] = None
     note: Optional[str] = None
     status: Optional[str] = None
-
-
-class UtilityBillRecipientsReplace(BaseModel):
-    user_ids: list[int]
+    remind_enabled: Optional[bool] = None
 
 
 class UtilityAccountCreate(BaseModel):
@@ -195,6 +193,7 @@ class UserUpdate(BaseModel):
     role: Optional[Literal["admin", "user", "viewer"]] = None
     status: Optional[Literal["active", "disabled"]] = None
     dingtalk_userid: Optional[str] = None
+    receive_bill_reminders: Optional[bool] = None
 
 
 class DingTalkLoginRequest(BaseModel):

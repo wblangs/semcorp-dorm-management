@@ -13,7 +13,7 @@ import {
   secondaryButtonClass,
 } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
-import type { Dorm, User, UtilityBill, UtilityBillRecipient } from "../types";
+import type { Dorm, UtilityBill, UtilityBillRecipient } from "../types";
 import { todayISO } from "../utils/date";
 
 type BillFormState = {
@@ -23,6 +23,7 @@ type BillFormState = {
   account: string;
   amount: string;
   note: string;
+  remind_enabled: boolean;
 };
 
 const emptyForm: BillFormState = {
@@ -32,26 +33,22 @@ const emptyForm: BillFormState = {
   account: "",
   amount: "",
   note: "",
+  remind_enabled: true,
 };
 
 
 export function UtilityBillsPage() {
-  const { canEdit, isAdmin } = useAuth();
+  const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<UtilityBill[]>([]);
   const [dorms, setDorms] = useState<Dorm[]>([]);
   const [recipients, setRecipients] = useState<UtilityBillRecipient[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [form, setForm] = useState<BillFormState>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
-  const [savingRecipients, setSavingRecipients] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
 
   const load = async () => {
     try {
@@ -64,15 +61,6 @@ export function UtilityBillsPage() {
       setRows(billData);
       setDorms(dormData);
       setRecipients(recipientData);
-      setSelectedUserIds(recipientData.map((item) => item.user_id));
-      if (canEdit) {
-        // Full user list is admin-only; editors still see current recipients.
-        try {
-          setUsers(await api.getUsers());
-        } catch {
-          setUsers([]);
-        }
-      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -85,13 +73,6 @@ export function UtilityBillsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-dismiss the green notice bar.
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(""), 5000);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
   const payloadFromForm = () => ({
     dorm_id: Number(form.dorm_id),
     fee_type: form.fee_type,
@@ -99,6 +80,7 @@ export function UtilityBillsPage() {
     account: form.account.trim() || null,
     amount: form.amount === "" ? null : Number(form.amount),
     note: form.note.trim() || null,
+    remind_enabled: form.remind_enabled,
   });
 
   const onSubmit = async (event: FormEvent) => {
@@ -128,6 +110,7 @@ export function UtilityBillsPage() {
       account: row.account ?? "",
       amount: row.amount === null ? "" : String(row.amount),
       note: row.note ?? "",
+      remind_enabled: row.remind_enabled,
     });
   };
 
@@ -143,34 +126,6 @@ export function UtilityBillsPage() {
       await load();
     } catch (err) {
       setError((err as Error).message);
-    }
-  };
-
-  const onSaveRecipients = async () => {
-    setError("");
-    setSavingRecipients(true);
-    try {
-      const saved = await api.replaceUtilityBillRecipients(selectedUserIds);
-      setRecipients(saved);
-      setSelectedUserIds(saved.map((item) => item.user_id));
-      setNotice("提醒接收人已保存");
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSavingRecipients(false);
-    }
-  };
-
-  const onSendTest = async () => {
-    setError("");
-    setSendingTest(true);
-    try {
-      await api.sendUtilityBillTestMessage();
-      setNotice("测试消息已发送，请在钉钉查看");
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSendingTest(false);
     }
   };
 
@@ -205,12 +160,6 @@ export function UtilityBillsPage() {
         .some((value) => String(value).toLowerCase().includes(keyword));
     });
   }, [dormMap, monthFilter, rows, search]);
-
-  const toggleUser = (userId: number) => {
-    setSelectedUserIds((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
-    );
-  };
 
   return (
     <section className="space-y-4">
@@ -278,6 +227,16 @@ export function UtilityBillsPage() {
               placeholder="选填"
             />
           </FormField>
+          <FormField label="是否需要提醒">
+            <select
+              className={fieldControlClass}
+              value={form.remind_enabled ? "yes" : "no"}
+              onChange={(e) => setForm((f) => ({ ...f, remind_enabled: e.target.value === "yes" }))}
+            >
+              <option value="yes">需要提醒（前 3 天早上 9 点）</option>
+              <option value="no">不提醒</option>
+            </select>
+          </FormField>
           <FormField label="备注">
             <input
               className={fieldControlClass}
@@ -304,9 +263,6 @@ export function UtilityBillsPage() {
       ) : null}
 
       <ErrorDialog message={error} onClose={() => setError("")} />
-      {notice ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-700">{notice}</div>
-      ) : null}
 
       {loading ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">加载中...</div>
@@ -341,10 +297,12 @@ export function UtilityBillsPage() {
               {
                 header: "钉钉提醒",
                 cell: (row) =>
-                  row.reminded_on ? (
+                  !row.remind_enabled ? (
+                    <span className="text-slate-400">不提醒</span>
+                  ) : row.reminded_on ? (
                     <span className="text-emerald-700">已提醒 {row.reminded_on}</span>
                   ) : (
-                    <span className="text-slate-400">未提醒</span>
+                    <span className="text-amber-600">待提醒</span>
                   ),
               },
               { header: "备注", cell: (row) => row.note ?? "-" },
@@ -374,61 +332,20 @@ export function UtilityBillsPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="text-base font-semibold">钉钉提醒设置</h3>
         <p className="mt-1 text-sm text-slate-500">
-          系统会在缴费日期<span className="font-semibold text-slate-700">前 3 天</span>
-          自动给下方接收人发送钉钉工作通知（每条缴费项只提醒一次，修改日期后会重新提醒）。
-          接收人需要用钉钉登录过本系统一次，完成钉钉账号绑定。
+          开启了「需要提醒」的缴费项，系统会在缴费日期
+          <span className="font-semibold text-slate-700">前 3 天的早上 9 点</span>
+          自动发送钉钉工作通知（每条缴费项只提醒一次，修改日期后会重新提醒）。
+          接收人在<span className="font-semibold text-slate-700">用户管理</span>
+          中为用户开启「接收缴费钉钉提醒」来设置，且需要用钉钉登录过本系统一次完成绑定。
         </p>
-        {isAdmin && users.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {users.map((user) => {
-              const selected = selectedUserIds.includes(user.id);
-              return (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => toggleUser(user.id)}
-                  className={`rounded-full border px-3 py-1 text-sm transition ${
-                    selected
-                      ? "border-indigo-300 bg-indigo-50 font-medium text-indigo-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {user.display_name || user.username}
-                  {user.dingtalk_userid ? " ✓钉钉" : " （未绑定钉钉）"}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="mt-3 text-sm text-slate-600">
-            当前接收人：
-            {recipients.length === 0
-              ? "未设置"
-              : recipients
-                  .map((item) => `${item.display_name || item.username}${item.has_dingtalk ? "" : "（未绑定钉钉）"}`)
-                  .join("、")}
-          </div>
-        )}
-        {isAdmin ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              className={primaryButtonClass}
-              type="button"
-              disabled={savingRecipients}
-              onClick={() => void onSaveRecipients()}
-            >
-              {savingRecipients ? "保存中..." : "保存接收人"}
-            </button>
-            <button
-              className={secondaryButtonClass}
-              type="button"
-              disabled={sendingTest}
-              onClick={() => void onSendTest()}
-            >
-              {sendingTest ? "发送中..." : "发送测试消息"}
-            </button>
-          </div>
-        ) : null}
+        <div className="mt-3 text-sm text-slate-600">
+          当前接收人：
+          {recipients.length === 0
+            ? "未设置（请到用户管理中为用户开启「接收缴费钉钉提醒」）"
+            : recipients
+                .map((item) => `${item.display_name || item.username}${item.has_dingtalk ? "" : "（未绑定钉钉）"}`)
+                .join("、")}
+        </div>
       </div>
     </section>
   );

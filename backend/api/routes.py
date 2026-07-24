@@ -29,7 +29,6 @@ from backend.schemas import (
     UtilityAccountCreate,
     UtilityAccountUpdate,
     UtilityBillCreate,
-    UtilityBillRecipientsReplace,
     UtilityBillUpdate,
     VehicleCreate,
     VehicleUpdate,
@@ -488,19 +487,10 @@ def list_utility_bill_recipients(db: Session = Depends(get_db), current_user: Us
     return management.list_utility_bill_recipients(db)
 
 
-@router.put("/utility-bills/recipients/list")
-def replace_utility_bill_recipients(
-    payload: UtilityBillRecipientsReplace,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    return management.replace_utility_bill_recipients(payload, db, operator=current_user.username)
-
-
 @router.post("/utility-bills/reminders/run")
 def run_utility_bill_reminders(db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
     _ = current_user
-    return management.run_utility_bill_reminders(db)
+    return management.run_utility_bill_reminders(db, respect_send_hour=False)
 
 
 @router.post("/utility-bills/reminders/test")

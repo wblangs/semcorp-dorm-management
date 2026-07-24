@@ -43,7 +43,6 @@ from backend.schemas import (
     UtilityAccountCreate,
     UtilityAccountUpdate,
     UtilityBillCreate,
-    UtilityBillRecipientsReplace,
     UtilityBillUpdate,
     VehicleCreate,
     VehicleUpdate,
@@ -182,6 +181,7 @@ def _serialize_user(user: User) -> dict:
         "status": user.status,
         "last_login_at": user.last_login_at,
         "dingtalk_userid": user.dingtalk_userid,
+        "receive_bill_reminders": user.receive_bill_reminders,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }
@@ -1117,8 +1117,10 @@ def delete_vehicle(vehicle_id: int, db: Session, operator: str = "admin"):
 
 # ---------------- 水电网气房费 (utility bills) ----------------
 
-# Reminder goes out this many days before the due date.
+# Reminder goes out this many days before the due date...
 UTILITY_REMINDER_DAYS_AHEAD = 3
+# ...at (or as soon as possible after) this local hour of the day.
+UTILITY_REMINDER_SEND_HOUR = 9
 
 UTILITY_BILL_STATUSES = {"pending", "paid"}
 
@@ -1275,71 +1277,44 @@ def delete_utility_account(account_id: int, db: Session, operator: str = "admin"
 
 
 def list_utility_bill_recipients(db: Session):
-    recipients = db.scalars(_active_stmt(UtilityBillRecipient)).all()
-    users = {user.id: user for user in db.scalars(_active_stmt(User)).all()}
-    result = []
-    for recipient in recipients:
-        user = users.get(recipient.user_id)
-        if not user:
-            continue
-        result.append(
-            {
-                "user_id": user.id,
-                "username": user.username,
-                "display_name": user.display_name,
-                "has_dingtalk": bool(user.dingtalk_userid),
-            }
-        )
-    return result
-
-
-def replace_utility_bill_recipients(payload: UtilityBillRecipientsReplace, db: Session, operator: str = "admin"):
-    wanted = set(payload.user_ids)
-    for user_id in wanted:
-        if not _get_active(db, User, user_id):
-            raise HTTPException(status_code=400, detail=f"用户 {user_id} 不存在")
-    # Soft-delete removed recipients; resurrect or create the wanted ones
-    # (the unique constraint on user_id also covers soft-deleted rows).
-    existing = db.scalars(select(UtilityBillRecipient)).all()
-    for row in existing:
-        if row.user_id in wanted:
-            row.is_deleted = False
-            wanted.discard(row.user_id)
-        else:
-            row.is_deleted = True
-    for user_id in wanted:
-        db.add(UtilityBillRecipient(user_id=user_id))
-    db.flush()
-    _audit(
-        db,
-        entity_type="utility_bill_recipients",
-        entity_id="global",
-        action="update",
-        before_data=None,
-        after_data={"user_ids": sorted(payload.user_ids)},
-        operator=operator,
-    )
-    db.commit()
-    return list_utility_bill_recipients(db)
+    """Users who opted into DingTalk bill reminders (flag lives on the user, managed on the Users page)."""
+    return [
+        {
+            "user_id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "has_dingtalk": bool(user.dingtalk_userid),
+        }
+        for user in db.scalars(
+            _active_stmt(User).where(User.receive_bill_reminders.is_(True)).order_by(User.id)
+        ).all()
+    ]
 
 
 def _utility_recipient_dingtalk_ids(db: Session) -> list[str]:
-    users = {user.id: user for user in db.scalars(_active_stmt(User)).all()}
-    ids = []
-    for recipient in db.scalars(_active_stmt(UtilityBillRecipient)).all():
-        user = users.get(recipient.user_id)
-        if user and user.dingtalk_userid:
-            ids.append(user.dingtalk_userid)
-    return ids
+    return [
+        user.dingtalk_userid
+        for user in db.scalars(
+            _active_stmt(User).where(
+                User.receive_bill_reminders.is_(True),
+                User.dingtalk_userid.is_not(None),
+            )
+        ).all()
+        if user.dingtalk_userid
+    ]
 
 
-def run_utility_bill_reminders(db: Session) -> dict:
-    """Send one DingTalk reminder per pending bill due within the next 3 days.
+def run_utility_bill_reminders(db: Session, respect_send_hour: bool = True) -> dict:
+    """Send one DingTalk reminder per remind-enabled bill due within the next 3 days.
 
-    Idempotent: each bill is reminded once (reminded_on guard); editing the due
-    date re-arms it. Called by the background scheduler and the manual endpoint.
+    Sent at (or as soon as possible after) 9:00 local time. Idempotent: each
+    bill is reminded once (reminded_on guard); editing the due date re-arms it.
+    Called by the background scheduler; the manual endpoint skips the hour gate.
     """
     from backend.services import dingtalk
+
+    if respect_send_hour and local_now().hour < UTILITY_REMINDER_SEND_HOUR:
+        return {"sent": 0, "reason": f"未到发送时间（每天 {UTILITY_REMINDER_SEND_HOUR} 点后发送）"}
 
     today = local_today()
     window_end = today + timedelta(days=UTILITY_REMINDER_DAYS_AHEAD)
@@ -1347,6 +1322,7 @@ def run_utility_bill_reminders(db: Session) -> dict:
         _active_stmt(UtilityBill)
         .where(
             UtilityBill.status == "pending",
+            UtilityBill.remind_enabled.is_(True),
             UtilityBill.reminded_on.is_(None),
             UtilityBill.due_date >= today,
             UtilityBill.due_date <= window_end,
@@ -1389,7 +1365,7 @@ def send_utility_bill_test_message(db: Session) -> dict:
     if not userids:
         raise HTTPException(
             status_code=400,
-            detail="没有绑定钉钉的提醒接收人：请先勾选接收人，且接收人需要用钉钉登录过本系统一次以完成绑定",
+            detail="没有绑定钉钉的提醒接收人：请在用户管理中为用户开启「接收缴费提醒」，且用户需要用钉钉登录过本系统一次以完成绑定",
         )
     return dingtalk.send_work_message(
         userids, f"【宿舍缴费提醒】这是一条测试消息（{local_today().isoformat()}），钉钉提醒配置成功。"

@@ -18,7 +18,6 @@ from .payloads import (
     UtilityAccountCreate,
     UtilityAccountUpdate,
     UtilityBillCreate,
-    UtilityBillRecipientsReplace,
     UtilityBillUpdate,
     VehicleCreate,
     VehicleUpdate,
@@ -51,7 +50,6 @@ __all__ = [
     "StayUpsert",
     "UtilityBillCreate",
     "UtilityBillUpdate",
-    "UtilityBillRecipientsReplace",
     "UtilityAccountCreate",
     "UtilityAccountUpdate",
 ]

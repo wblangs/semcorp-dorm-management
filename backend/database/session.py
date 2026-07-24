@@ -98,6 +98,19 @@ def run_lightweight_migrations() -> None:
             }
             if "account" not in utility_bill_columns:
                 safe_add_column(conn, "ALTER TABLE utility_bills ADD COLUMN account VARCHAR(200)")
+            if "remind_enabled" not in utility_bill_columns:
+                safe_add_column(conn, "ALTER TABLE utility_bills ADD COLUMN remind_enabled BOOLEAN DEFAULT 1 NOT NULL")
+
+        users_table_exists = conn.execute(
+            text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        ).fetchone()
+        if users_table_exists:
+            user_columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            }
+            if "receive_bill_reminders" not in user_columns:
+                safe_add_column(conn, "ALTER TABLE users ADD COLUMN receive_bill_reminders BOOLEAN DEFAULT 0 NOT NULL")
 
         stay_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='stays'")
