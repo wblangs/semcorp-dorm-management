@@ -809,7 +809,8 @@ export function AllocationPage() {
                     {
                       header: "状态",
                       cell: (row) =>
-                        row.temp_leave_start && row.temp_leave_end ? (
+                        // CHANGE: 出差/临时空出 marker auto-hides once the end date has passed.
+                        row.temp_leave_start && row.temp_leave_end && row.temp_leave_end >= todayISO() ? (
                           <span className="inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
                             临时空出 {row.temp_leave_start} ~ {row.temp_leave_end}
                           </span>

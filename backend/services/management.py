@@ -1304,6 +1304,38 @@ def _utility_recipient_dingtalk_ids(db: Session) -> list[str]:
     ]
 
 
+def clear_expired_temp_leaves(db: Session) -> int:
+    """出差/临时空出 auto-expiry: drop the marker once the end date has passed.
+
+    Runs from the background scheduler so the note disappears everywhere
+    (summary report, allocation list) without manual cleanup.
+    """
+    today = local_today()
+    allocations = db.scalars(
+        _active_stmt(Allocation).where(
+            Allocation.temp_leave_end.is_not(None),
+            Allocation.temp_leave_end < today,
+        )
+    ).all()
+    for allocation in allocations:
+        before = _model_data(allocation)
+        allocation.temp_leave_start = None
+        allocation.temp_leave_end = None
+        db.flush()
+        _audit(
+            db,
+            entity_type="allocation",
+            entity_id=allocation.id,
+            action="temp_leave_expired",
+            before_data=before,
+            after_data=_model_data(allocation),
+            operator="system",
+        )
+    if allocations:
+        db.commit()
+    return len(allocations)
+
+
 def run_utility_bill_reminders(db: Session, respect_send_hour: bool = True) -> dict:
     """Send one DingTalk reminder per remind-enabled bill due within the next 3 days.
 

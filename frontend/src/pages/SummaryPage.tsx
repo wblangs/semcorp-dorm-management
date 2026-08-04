@@ -126,8 +126,9 @@ export function SummaryPage() {
         const occupants = activeByRoom.get(room.id) ?? [];
         occupants.forEach((allocation) => {
           const person = peopleMap.get(allocation.person_id);
+          // CHANGE: 出差/临时空出 marker auto-hides once the end date has passed.
           const tempLeave =
-            allocation.temp_leave_start && allocation.temp_leave_end
+            allocation.temp_leave_start && allocation.temp_leave_end && allocation.temp_leave_end >= todayISO()
               ? `临时空出 ${allocation.temp_leave_start} ~ ${allocation.temp_leave_end}`
               : "";
           seq += 1;

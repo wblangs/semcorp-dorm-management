@@ -14,6 +14,7 @@ from backend.database.session import engine, run_lightweight_migrations, Session
 from backend.models import Base
 from backend.services.management import (
     backfill_room_items,
+    clear_expired_temp_leaves,
     run_utility_bill_reminders,
     seed_default_dictionaries,
 )
@@ -86,6 +87,10 @@ def _utility_bill_reminder_loop() -> None:
     while True:
         try:
             with Session(engine) as session:
+                # 出差/临时空出 auto-expiry: clear markers whose end date passed.
+                cleared = clear_expired_temp_leaves(session)
+                if cleared:
+                    logger.info("cleared %s expired temp-leave marker(s)", cleared)
                 result = run_utility_bill_reminders(session)
             if result.get("sent"):
                 logger.info("utility bill reminders sent: %s", result)
