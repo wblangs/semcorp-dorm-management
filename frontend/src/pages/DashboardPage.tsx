@@ -103,6 +103,42 @@ export function DashboardPage() {
         ) : null}
       </div>
 
+      <div className="flex items-center gap-2 pt-2">
+        <h3 className="text-sm font-semibold text-slate-700">车辆</h3>
+        <span className="h-px flex-1 bg-slate-200" />
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
+        {[
+          { label: "可用车辆", value: data.availableVehicles, to: "/vehicles", tone: "" },
+          { label: "在修车辆", value: data.vehiclesInRepair ?? data.maintenanceVehicles, to: "/vehicles", tone: "warn" },
+          { label: "停用 / 已处置", value: data.disabledVehicles, to: "/vehicles", tone: "" },
+          { label: "保险 30 天内到期", value: data.vehicleInsuranceExpiring30, to: "/vehicle-alerts", tone: "warn" },
+          { label: "年检 30 天内到期", value: data.vehicleInspectionExpiring30, to: "/vehicle-alerts", tone: "warn" },
+          { label: "注册 30 天内到期", value: data.vehicleRegistrationExpiring30 ?? 0, to: "/vehicle-alerts", tone: "warn" },
+          { label: "保养到期 (30 天)", value: data.vehicleMaintenanceDue30, to: "/vehicle-alerts", tone: "warn" },
+          { label: "租赁合同 60 天内到期", value: data.vehicleLeaseExpiring60 ?? 0, to: "/vehicle-alerts", tone: "warn" },
+          { label: "驾照 30 天内到期", value: data.driverLicenseExpiring30 ?? 0, to: "/vehicle-alerts", tone: "warn" },
+          { label: "未上保险", value: data.uninsuredVehicles ?? 0, to: "/vehicle-alerts", tone: "bad" },
+          { label: "未挂靠被保险人", value: data.vehiclesWithoutDrivers ?? 0, to: "/vehicle-alerts", tone: "bad" },
+          { label: "理赔进行中", value: data.openClaims ?? 0, to: "/vehicles", tone: "" },
+        ].map((card) => (
+          <Link
+            key={card.label}
+            to={card.to}
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/40"
+          >
+            <p className="text-sm text-slate-500">{card.label}</p>
+            <p
+              className={`mt-1 text-2xl font-bold ${
+                card.value > 0 && card.tone === "bad" ? "text-rose-600" : card.value > 0 && card.tone === "warn" ? "text-amber-600" : ""
+              }`}
+            >
+              {card.value}
+            </p>
+          </Link>
+        ))}
+      </div>
+
       {showRenewalDorms ? (
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">90天内需要续租的宿舍</h3>

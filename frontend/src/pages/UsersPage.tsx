@@ -21,6 +21,7 @@ type UserFormState = {
   status: "active" | "disabled";
   dingtalk_userid: string;
   receive_bill_reminders: boolean;
+  receive_vehicle_reminders: boolean;
 };
 
 const emptyForm: UserFormState = {
@@ -31,6 +32,7 @@ const emptyForm: UserFormState = {
   status: "active",
   dingtalk_userid: "",
   receive_bill_reminders: false,
+  receive_vehicle_reminders: false,
 };
 
 export function UsersPage() {
@@ -60,6 +62,7 @@ export function UsersPage() {
       status: user.status,
       dingtalk_userid: user.dingtalk_userid ?? "",
       receive_bill_reminders: user.receive_bill_reminders,
+      receive_vehicle_reminders: user.receive_vehicle_reminders,
     });
     setResetPassword("");
     setError("");
@@ -102,6 +105,7 @@ export function UsersPage() {
           status: form.status,
           dingtalk_userid: form.dingtalk_userid.trim() || undefined,
           receive_bill_reminders: form.receive_bill_reminders,
+          receive_vehicle_reminders: form.receive_vehicle_reminders,
         });
         if (resetPassword) {
           await api.resetUserPassword(editingId, resetPassword);
@@ -200,6 +204,18 @@ export function UsersPage() {
               </select>
             </FormField>
           ) : null}
+          {editingId ? (
+            <FormField label="接收车辆钉钉提醒">
+              <select
+                className={fieldControlClass}
+                value={form.receive_vehicle_reminders ? "yes" : "no"}
+                onChange={(event) => setForm({ ...form, receive_vehicle_reminders: event.target.value === "yes" })}
+              >
+                <option value="no">不接收</option>
+                <option value="yes">接收</option>
+              </select>
+            </FormField>
+          ) : null}
           <div className="flex items-end gap-2">
             <button className={primaryButtonClass}>{editingId ? "保存用户" : "新增用户"}</button>
             {editingId ? (
@@ -231,6 +247,17 @@ export function UsersPage() {
             header: "缴费提醒",
             cell: (user) =>
               user.receive_bill_reminders ? (
+                <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-sm font-medium text-emerald-700">
+                  接收
+                </span>
+              ) : (
+                <span className="text-slate-400">-</span>
+              ),
+          },
+          {
+            header: "车辆提醒",
+            cell: (user) =>
+              user.receive_vehicle_reminders ? (
                 <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-sm font-medium text-emerald-700">
                   接收
                 </span>

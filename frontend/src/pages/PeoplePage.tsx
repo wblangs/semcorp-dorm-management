@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
 import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, primaryButtonClass, secondaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
-import type { Allocation, Dorm, Person, Room, StayRecord } from "../types";
+import type { Allocation, Dorm, Person, PersonLicense, Room, StayRecord } from "../types";
 import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
 
@@ -28,6 +28,15 @@ type StayFormState = {
   note: string;
 };
 
+type LicenseFormState = {
+  license_number: string;
+  license_state: string;
+  license_class: string;
+  issue_date: string;
+  expire_date: string;
+  note: string;
+};
+
 const emptyForm: PersonFormState = {
   chinese_name: "",
   english_name: "",
@@ -45,6 +54,15 @@ const emptyStayForm: StayFormState = {
   note: "",
 };
 
+const emptyLicenseForm: LicenseFormState = {
+  license_number: "",
+  license_state: "",
+  license_class: "",
+  issue_date: "",
+  expire_date: "",
+  note: "",
+};
+
 export function PeoplePage() {
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
@@ -55,6 +73,8 @@ export function PeoplePage() {
   const [dorms, setDorms] = useState<Dorm[]>([]);
   const [form, setForm] = useState<PersonFormState>(emptyForm);
   const [stayForm, setStayForm] = useState<StayFormState>(emptyStayForm);
+  const [licenseForm, setLicenseForm] = useState<LicenseFormState>(emptyLicenseForm);
+  const [licenses, setLicenses] = useState<PersonLicense[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -65,18 +85,20 @@ export function PeoplePage() {
   const load = async () => {
     try {
       setLoading(true);
-      const [peopleData, stayData, allocationData, roomData, dormData] = await Promise.all([
+      const [peopleData, stayData, allocationData, roomData, dormData, licenseData] = await Promise.all([
         api.getPeople(),
         api.getStays(),
         api.getAllocations(),
         api.getRooms(),
         api.getDorms(),
+        api.getPersonLicenses(),
       ]);
       setRows(peopleData);
       setStays(stayData);
       setAllocations(allocationData);
       setRooms(roomData);
       setDorms(dormData);
+      setLicenses(licenseData);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -116,8 +138,22 @@ export function PeoplePage() {
           note: stayForm.note.trim() || null,
         });
       }
+      // 驾照信息：有任一字段填写就 upsert（与签证停留同一保存动作）。
+      const hasLicenseInput = Object.values(licenseForm).some((value) => value.trim());
+      const editingLicense = editingId ? licenses.find((item) => item.person_id === editingId) : undefined;
+      if (personId && (hasLicenseInput || editingLicense)) {
+        await api.upsertPersonLicense(personId, {
+          license_number: licenseForm.license_number.trim() || null,
+          license_state: licenseForm.license_state.trim() || null,
+          license_class: licenseForm.license_class.trim() || null,
+          issue_date: licenseForm.issue_date || null,
+          expire_date: licenseForm.expire_date || null,
+          note: licenseForm.note.trim() || null,
+        });
+      }
       setForm(emptyForm);
       setStayForm(emptyStayForm);
+      setLicenseForm(emptyLicenseForm);
       setEditingId(null);
       await load();
     } catch (err) {
@@ -127,7 +163,16 @@ export function PeoplePage() {
 
   const onEdit = (row: Person) => {
     const stay = stays.find((item) => item.person_id === row.id);
+    const license = licenses.find((item) => item.person_id === row.id);
     setEditingId(row.id);
+    setLicenseForm({
+      license_number: license?.license_number ?? "",
+      license_state: license?.license_state ?? "",
+      license_class: license?.license_class ?? "",
+      issue_date: license?.issue_date ?? "",
+      expire_date: license?.expire_date ?? "",
+      note: license?.note ?? "",
+    });
     setForm({
       chinese_name: row.chinese_name,
       english_name: row.english_name ?? "",
@@ -154,6 +199,7 @@ export function PeoplePage() {
         setEditingId(null);
         setForm(emptyForm);
         setStayForm(emptyStayForm);
+        setLicenseForm(emptyLicenseForm);
       }
       await load();
     } catch (err) {
@@ -322,6 +368,7 @@ export function PeoplePage() {
               setEditingId(null);
               setForm(emptyForm);
               setStayForm(emptyStayForm);
+              setLicenseForm(emptyLicenseForm);
             }}
           >
             取消编辑
@@ -356,6 +403,30 @@ export function PeoplePage() {
           </FormField>
           <FormField label="备注">
             <input className={fieldControlClass} value={stayForm.note} onChange={(e) => setStayForm((f) => ({ ...f, note: e.target.value }))} />
+          </FormField>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-800">驾照信息 <span className="ml-1 text-xs font-normal text-slate-400">挂靠车辆保险时用于到期提醒</span></h3>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <FormField label="驾照号">
+            <input className={fieldControlClass} value={licenseForm.license_number} onChange={(e) => setLicenseForm((f) => ({ ...f, license_number: e.target.value }))} />
+          </FormField>
+          <FormField label="签发州">
+            <input className={fieldControlClass} placeholder="如 PA" value={licenseForm.license_state} onChange={(e) => setLicenseForm((f) => ({ ...f, license_state: e.target.value }))} />
+          </FormField>
+          <FormField label="类别">
+            <input className={fieldControlClass} placeholder="如 Class C" value={licenseForm.license_class} onChange={(e) => setLicenseForm((f) => ({ ...f, license_class: e.target.value }))} />
+          </FormField>
+          <FormField label="签发日期">
+            <input className={fieldControlClass} type="date" value={licenseForm.issue_date} onChange={(e) => setLicenseForm((f) => ({ ...f, issue_date: e.target.value }))} />
+          </FormField>
+          <FormField label="到期日期">
+            <input className={fieldControlClass} type="date" value={licenseForm.expire_date} onChange={(e) => setLicenseForm((f) => ({ ...f, expire_date: e.target.value }))} />
+          </FormField>
+          <FormField label="备注">
+            <input className={fieldControlClass} value={licenseForm.note} onChange={(e) => setLicenseForm((f) => ({ ...f, note: e.target.value }))} />
           </FormField>
         </div>
       </section>

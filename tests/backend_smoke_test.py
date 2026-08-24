@@ -203,17 +203,144 @@ class BackendSmokeTest(unittest.TestCase):
             ),
             self.db,
         )
-        self.assertEqual(vehicle.vehicle_type, "SUV")
+        self.assertEqual(vehicle["vehicle_type"], "SUV")
+        # 建车时的初始宿舍生成首条调拨记录并写入缓存字段。
+        self.assertEqual(vehicle["base_dorm_id"], dorm.id)
+        assignments = management.list_vehicle_assignments(vehicle["id"], self.db)
+        self.assertEqual(len(assignments), 1)
 
         updated = management.update_vehicle(
-            vehicle.id,
-            VehicleUpdate(status="maintenance", note="保养中"),
+            vehicle["id"],
+            VehicleUpdate(status="disabled", note="停用中"),
             self.db,
         )
-        self.assertEqual(updated.status, "maintenance")
+        self.assertEqual(updated["status"], "disabled")
 
-        management.delete_vehicle(vehicle.id, self.db)
+        management.delete_vehicle(vehicle["id"], self.db)
         self.assertEqual(management.list_vehicles(self.db), [])
+
+        # 软删除不占坑：同车牌可以重新建档（唯一性只比对未删除记录）。
+        again = management.create_vehicle(
+            VehicleCreate(plate_number="TEST-001", seat_count=5),
+            self.db,
+        )
+        self.assertEqual(again["plate_number"], "TEST-001")
+        with self.assertRaises(HTTPException):
+            management.create_vehicle(
+                VehicleCreate(plate_number="TEST-001", seat_count=5),
+                self.db,
+            )
+
+    def test_vehicle_v2_drivers_policies_and_status_linkage(self):
+        from datetime import timedelta
+
+        from backend.schemas import (
+            InsurancePolicyCreate,
+            PersonLicenseUpsert,
+            VehicleAssign,
+            VehicleDriverCreate,
+            VehicleMaintenanceCreate,
+            VehicleRepairCreate,
+            VehicleRepairUpdate,
+        )
+
+        dorm_a = management.create_dorm(DormCreate(name="1号宿舍", type="House", address="A St"), self.db)
+        dorm_b = management.create_dorm(DormCreate(name="2号宿舍", type="House", address="B St"), self.db)
+        vehicle = management.create_vehicle(
+            VehicleCreate(plate_number="JVK-4172", seat_count=7, base_dorm_id=dorm_a.id, odometer=48000),
+            self.db,
+        )
+        vehicle_id = vehicle["id"]
+        person_a = management.create_person(
+            PersonCreate(chinese_name="张伟", department="IT", person_type="Employee", gender="Male"),
+            self.db,
+        )
+        person_b = management.create_person(
+            PersonCreate(chinese_name="李强", department="IT", person_type="Employee", gender="Male"),
+            self.db,
+        )
+        person_c = management.create_person(
+            PersonCreate(chinese_name="王磊", department="IT", person_type="Employee", gender="Male"),
+            self.db,
+        )
+        management.upsert_person_license(
+            PersonLicenseUpsert(person_id=person_a.id, license_number="A1", expire_date=date.today() + timedelta(days=900)),
+            self.db,
+        )
+
+        # 挂靠: 无驾照的人 → 警告放行；上限 2 人；primary 唯一。
+        first = management.add_vehicle_driver(
+            vehicle_id, VehicleDriverCreate(person_id=person_a.id, role="primary"), self.db
+        )
+        self.assertEqual(first["warnings"], [])
+        second = management.add_vehicle_driver(
+            vehicle_id, VehicleDriverCreate(person_id=person_b.id), self.db
+        )
+        self.assertTrue(any("未维护驾照" in w for w in second["warnings"]))
+        with self.assertRaises(HTTPException):
+            management.add_vehicle_driver(
+                vehicle_id, VehicleDriverCreate(person_id=person_c.id), self.db
+            )
+
+        # 保单: 续保自动过期旧保单并刷新缓存；快照记录当时挂靠人。
+        p1 = management.create_vehicle_policy(
+            vehicle_id,
+            InsurancePolicyCreate(insurer="GEICO", start_date=date(2025, 9, 16), end_date=date(2026, 9, 15)),
+            self.db,
+        )
+        self.assertIn("张伟", p1["policy"]["driver_snapshot"])
+        p2 = management.create_vehicle_policy(
+            vehicle_id,
+            InsurancePolicyCreate(insurer="Progressive", start_date=date(2026, 9, 10), end_date=date(2027, 9, 9)),
+            self.db,
+        )
+        self.assertTrue(p2["warnings"])  # 日期重叠警告放行
+        detail = management.get_vehicle_detail(vehicle_id, self.db)
+        self.assertEqual(detail["vehicle"]["insurance_expire_date"], date(2027, 9, 9))
+        statuses = {p["id"]: p["status"] for p in detail["policies"]}
+        self.assertEqual(statuses[p1["policy"]["id"]], "expired")
+        # 删除生效保单 → 缓存清空（删除路径也刷新）。
+        management.delete_vehicle_policy(p2["policy"]["id"], self.db)
+        detail = management.get_vehicle_detail(vehicle_id, self.db)
+        self.assertIsNone(detail["vehicle"]["insurance_expire_date"])
+
+        # 保养: 自动推算下次到期（默认 5000mi/6mo 主数据），回写车辆里程。
+        maintenance = management.create_vehicle_maintenance(
+            vehicle_id,
+            VehicleMaintenanceCreate(maintenance_date=date(2026, 2, 28), odometer=50000),
+            self.db,
+        )
+        self.assertEqual(maintenance.next_due_date, date(2026, 8, 28))
+        self.assertEqual(maintenance.next_due_mileage, 55000)
+        detail = management.get_vehicle_detail(vehicle_id, self.db)
+        self.assertEqual(detail["vehicle"]["odometer"], 50000)
+        self.assertEqual(detail["vehicle"]["maintenance_due_date"], date(2026, 8, 28))
+
+        # 修理联动: 在修且影响用车 → in_repair；结单 → available；手工 disabled 优先。
+        repair = management.create_vehicle_repair(
+            vehicle_id,
+            VehicleRepairCreate(reported_date=date.today(), status="in_repair", affects_availability=True),
+            self.db,
+        )
+        detail = management.get_vehicle_detail(vehicle_id, self.db)
+        self.assertEqual(detail["vehicle"]["status"], "in_repair")
+        management.update_vehicle(vehicle_id, VehicleUpdate(status="disabled"), self.db)
+        management.update_vehicle_repair(repair.id, VehicleRepairUpdate(status="done"), self.db)
+        detail = management.get_vehicle_detail(vehicle_id, self.db)
+        self.assertEqual(detail["vehicle"]["status"], "disabled")  # 手工状态不被联动覆盖
+        management.update_vehicle(vehicle_id, VehicleUpdate(status="available"), self.db)
+
+        # 调拨: 自动结束旧记录并刷新 base_dorm_id。
+        management.assign_vehicle(vehicle_id, VehicleAssign(dorm_id=dorm_b.id), self.db)
+        detail = management.get_vehicle_detail(vehicle_id, self.db)
+        self.assertEqual(detail["vehicle"]["base_dorm_id"], dorm_b.id)
+        assignment_statuses = [a["status"] for a in detail["assignments"]]
+        self.assertEqual(sorted(assignment_statuses), ["active", "ended"])
+
+        # 提醒聚合: 30 天内到期的保养进 within30/within7/overdue 之一。
+        alerts = management.vehicle_alerts(self.db)
+        kinds = {item["kind"] for group in ("overdue", "within7", "within30") for item in alerts[group]}
+        self.assertIn("maintenance_due", kinds)
 
     def test_auth_permissions_and_audit_operator(self):
         admin = management.create_user(

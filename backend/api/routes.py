@@ -15,8 +15,11 @@ from backend.schemas import (
     DingTalkLoginRequest,
     DormCreate,
     DormUpdate,
+    InsurancePolicyCreate,
+    InsurancePolicyUpdate,
     LoginRequest,
     PersonCreate,
+    PersonLicenseUpsert,
     PersonUpdate,
     RoomCreate,
     RoomUpdate,
@@ -30,7 +33,17 @@ from backend.schemas import (
     UtilityAccountUpdate,
     UtilityBillCreate,
     UtilityBillUpdate,
+    VehicleAccidentCreate,
+    VehicleAccidentUpdate,
+    VehicleAssign,
     VehicleCreate,
+    VehicleDriverCreate,
+    VehicleDriverUpdate,
+    VehicleMaintenanceCreate,
+    VehicleMaintenanceUpdate,
+    VehicleOdometerUpdate,
+    VehicleRepairCreate,
+    VehicleRepairUpdate,
     VehicleUpdate,
 )
 from backend.services import management
@@ -387,10 +400,38 @@ def list_available_rooms(
     return management.list_available_rooms(dorm_id=dorm_id, person_id=person_id, db=db)
 
 
+# ---- 车辆管理 V2 ----
+# 静态路径（alerts/summary/reminders）必须注册在 /vehicles/{vehicle_id} 之前：
+# FastAPI 按声明顺序匹配，反了会把 "alerts" 当作 vehicle_id 解析返回 422。
+
 @router.get("/vehicles")
 def list_vehicles(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _ = current_user
     return management.list_vehicles(db)
+
+
+@router.get("/vehicles/alerts")
+def vehicle_alerts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return management.vehicle_alerts(db)
+
+
+@router.get("/vehicles/summary")
+def vehicle_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return management.vehicle_summary(db)
+
+
+@router.post("/vehicles/reminders/run")
+def run_vehicle_reminders(db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
+    _ = current_user
+    return management.run_vehicle_reminders(db, respect_send_hour=False)
+
+
+@router.post("/vehicles/reminders/test")
+def send_vehicle_test_message(db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    _ = current_user
+    return management.send_vehicle_test_message(db)
 
 
 @router.post("/vehicles")
@@ -400,6 +441,12 @@ def create_vehicle(
     current_user: User = Depends(require_editor),
 ):
     return management.create_vehicle(payload, db, operator=current_user.username)
+
+
+@router.get("/vehicles/{vehicle_id}")
+def get_vehicle_detail(vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return management.get_vehicle_detail(vehicle_id, db)
 
 
 @router.put("/vehicles/{vehicle_id}")
@@ -413,8 +460,239 @@ def update_vehicle(
 
 
 @router.delete("/vehicles/{vehicle_id}")
-def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_editor)):
+def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     return management.delete_vehicle(vehicle_id, db, operator=current_user.username)
+
+
+@router.put("/vehicles/{vehicle_id}/odometer")
+def update_vehicle_odometer(
+    vehicle_id: int,
+    payload: VehicleOdometerUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.update_vehicle_odometer(vehicle_id, payload, db, operator=current_user.username)
+
+
+@router.get("/vehicles/{vehicle_id}/assignments")
+def list_vehicle_assignments(
+    vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _ = current_user
+    return management.list_vehicle_assignments(vehicle_id, db)
+
+
+@router.post("/vehicles/{vehicle_id}/assign")
+def assign_vehicle(
+    vehicle_id: int,
+    payload: VehicleAssign,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.assign_vehicle(vehicle_id, payload, db, operator=current_user.username)
+
+
+# 挂靠人增减仅 admin（权限矩阵 §7）。
+@router.get("/vehicles/{vehicle_id}/drivers")
+def list_vehicle_drivers(
+    vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _ = current_user
+    return management.list_vehicle_drivers(vehicle_id, db)
+
+
+@router.post("/vehicles/{vehicle_id}/drivers")
+def add_vehicle_driver(
+    vehicle_id: int,
+    payload: VehicleDriverCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return management.add_vehicle_driver(vehicle_id, payload, db, operator=current_user.username)
+
+
+@router.put("/vehicle-drivers/{driver_id}")
+def update_vehicle_driver(
+    driver_id: int,
+    payload: VehicleDriverUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return management.update_vehicle_driver(driver_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/vehicle-drivers/{driver_id}")
+def remove_vehicle_driver(
+    driver_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)
+):
+    return management.remove_vehicle_driver(driver_id, db, operator=current_user.username)
+
+
+@router.get("/people/{person_id}/license")
+def get_person_license(
+    person_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _ = current_user
+    return management.get_person_license(person_id, db)
+
+
+@router.get("/person-licenses")
+def list_person_licenses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ = current_user
+    return management.list_person_licenses(db)
+
+
+@router.post("/people/{person_id}/license")
+def upsert_person_license(
+    person_id: int,
+    payload: PersonLicenseUpsert,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    if payload.person_id != person_id:
+        payload = payload.model_copy(update={"person_id": person_id})
+    return management.upsert_person_license(payload, db, operator=current_user.username)
+
+
+# 保单管理仅 admin（权限矩阵 §7）。
+@router.get("/vehicles/{vehicle_id}/policies")
+def list_vehicle_policies(
+    vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _ = current_user
+    return management.list_vehicle_policies(vehicle_id, db)
+
+
+@router.post("/vehicles/{vehicle_id}/policies")
+def create_vehicle_policy(
+    vehicle_id: int,
+    payload: InsurancePolicyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return management.create_vehicle_policy(vehicle_id, payload, db, operator=current_user.username)
+
+
+@router.put("/insurance-policies/{policy_id}")
+def update_vehicle_policy(
+    policy_id: int,
+    payload: InsurancePolicyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return management.update_vehicle_policy(policy_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/insurance-policies/{policy_id}")
+def delete_vehicle_policy(
+    policy_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)
+):
+    return management.delete_vehicle_policy(policy_id, db, operator=current_user.username)
+
+
+@router.get("/vehicles/{vehicle_id}/maintenances")
+def list_vehicle_maintenances(
+    vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _ = current_user
+    return management.list_vehicle_maintenances(vehicle_id, db)
+
+
+@router.post("/vehicles/{vehicle_id}/maintenances")
+def create_vehicle_maintenance(
+    vehicle_id: int,
+    payload: VehicleMaintenanceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.create_vehicle_maintenance(vehicle_id, payload, db, operator=current_user.username)
+
+
+@router.put("/vehicle-maintenances/{maintenance_id}")
+def update_vehicle_maintenance(
+    maintenance_id: int,
+    payload: VehicleMaintenanceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.update_vehicle_maintenance(maintenance_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/vehicle-maintenances/{maintenance_id}")
+def delete_vehicle_maintenance(
+    maintenance_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)
+):
+    return management.delete_vehicle_maintenance(maintenance_id, db, operator=current_user.username)
+
+
+@router.get("/vehicles/{vehicle_id}/repairs")
+def list_vehicle_repairs(
+    vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _ = current_user
+    return management.list_vehicle_repairs(vehicle_id, db)
+
+
+@router.post("/vehicles/{vehicle_id}/repairs")
+def create_vehicle_repair(
+    vehicle_id: int,
+    payload: VehicleRepairCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.create_vehicle_repair(vehicle_id, payload, db, operator=current_user.username)
+
+
+@router.put("/vehicle-repairs/{repair_id}")
+def update_vehicle_repair(
+    repair_id: int,
+    payload: VehicleRepairUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.update_vehicle_repair(repair_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/vehicle-repairs/{repair_id}")
+def delete_vehicle_repair(
+    repair_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)
+):
+    return management.delete_vehicle_repair(repair_id, db, operator=current_user.username)
+
+
+@router.get("/vehicles/{vehicle_id}/accidents")
+def list_vehicle_accidents(
+    vehicle_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _ = current_user
+    return management.list_vehicle_accidents(vehicle_id, db)
+
+
+@router.post("/vehicles/{vehicle_id}/accidents")
+def create_vehicle_accident(
+    vehicle_id: int,
+    payload: VehicleAccidentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.create_vehicle_accident(vehicle_id, payload, db, operator=current_user.username)
+
+
+@router.put("/vehicle-accidents/{accident_id}")
+def update_vehicle_accident(
+    accident_id: int,
+    payload: VehicleAccidentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    return management.update_vehicle_accident(accident_id, payload, db, operator=current_user.username)
+
+
+@router.delete("/vehicle-accidents/{accident_id}")
+def delete_vehicle_accident(
+    accident_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)
+):
+    return management.delete_vehicle_accident(accident_id, db, operator=current_user.username)
 
 
 @router.get("/utility-bills")

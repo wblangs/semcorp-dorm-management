@@ -6,7 +6,9 @@ import type {
   DashboardData,
   DictionaryState,
   Dorm,
+  InsurancePolicy,
   Person,
+  PersonLicense,
   Room,
   RoomItem,
   StayRecord,
@@ -17,6 +19,13 @@ import type {
   UtilityBill,
   UtilityBillRecipient,
   Vehicle,
+  VehicleAccident,
+  VehicleAlertsPayload,
+  VehicleAssignment,
+  VehicleDetail,
+  VehicleDriver,
+  VehicleMaintenance,
+  VehicleRepair,
 } from "../types";
 
 type NewDorm = Omit<Dorm, "id">;
@@ -28,7 +37,33 @@ type CreateRoomPayload = Omit<
   "bed_size" | "light_type" | "light_count" | "nightstand_count" | "trash_can_count"
 >;
 type NewPerson = Omit<Person, "id">;
-type NewVehicle = Omit<Vehicle, "id">;
+// 派生缓存字段（保险到期/下次保养/常驻宿舍）不在建车/改车 payload 里；
+// base_dorm_id 仅建车时可传，用于生成首条调拨记录。
+export type VehiclePayload = {
+  plate_number: string;
+  vin?: string | null;
+  make?: string | null;
+  model?: string | null;
+  model_year?: number | null;
+  color?: string | null;
+  seat_count: number;
+  vehicle_type?: string | null;
+  ownership_type?: "owned" | "leased";
+  purchase_date?: string | null;
+  purchase_price?: number | null;
+  lease_company?: string | null;
+  lease_start_date?: string | null;
+  lease_end_date?: string | null;
+  lease_monthly_fee?: number | null;
+  base_dorm_id?: number | null;
+  inspection_expire_date?: string | null;
+  registration_expire_date?: string | null;
+  odometer?: number | null;
+  maintenance_interval_miles?: number | null;
+  maintenance_interval_months?: number | null;
+  note?: string | null;
+  status?: Vehicle["status"];
+};
 // status stays backend-side (defaults to pending); the UI no longer sets it.
 type NewUtilityBill = Omit<UtilityBill, "id" | "reminded_on" | "status">;
 type NewUtilityAccount = Omit<UtilityAccount, "id">;
@@ -59,6 +94,7 @@ export const api = {
       status?: "active" | "disabled";
       dingtalk_userid?: string | null;
       receive_bill_reminders?: boolean;
+      receive_vehicle_reminders?: boolean;
     },
   ) => apiRequest<User>(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteUser: (id: number) => apiRequest<{ deleted: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
@@ -166,11 +202,93 @@ export const api = {
   getStayRisks: () => apiRequest<StayRiskPayload>("/api/stays/risks"),
 
   getVehicles: () => apiRequest<Vehicle[]>("/api/vehicles"),
-  createVehicle: (payload: NewVehicle) =>
+  getVehicleDetail: (id: number) => apiRequest<VehicleDetail>(`/api/vehicles/${id}`),
+  createVehicle: (payload: VehiclePayload) =>
     apiRequest<Vehicle>("/api/vehicles", { method: "POST", body: JSON.stringify(payload) }),
-  updateVehicle: (id: number, payload: NewVehicle) =>
+  updateVehicle: (id: number, payload: Partial<Omit<VehiclePayload, "base_dorm_id" | "odometer">>) =>
     apiRequest<Vehicle>(`/api/vehicles/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteVehicle: (id: number) => apiRequest<{ deleted: boolean }>(`/api/vehicles/${id}`, { method: "DELETE" }),
+  updateVehicleOdometer: (id: number, odometer: number, force = false) =>
+    apiRequest<Vehicle>(`/api/vehicles/${id}/odometer`, {
+      method: "PUT",
+      body: JSON.stringify({ odometer, force }),
+    }),
+  getVehicleAlerts: () => apiRequest<VehicleAlertsPayload>("/api/vehicles/alerts"),
+  runVehicleReminders: () =>
+    apiRequest<{ sent: number; reason?: string; recipients?: number }>("/api/vehicles/reminders/run", {
+      method: "POST",
+    }),
+  sendVehicleTestMessage: () =>
+    apiRequest<{ sent: boolean }>("/api/vehicles/reminders/test", { method: "POST" }),
+
+  assignVehicle: (id: number, payload: { dorm_id: number; start_date?: string | null; note?: string | null }) =>
+    apiRequest<VehicleAssignment>(`/api/vehicles/${id}/assign`, { method: "POST", body: JSON.stringify(payload) }),
+
+  addVehicleDriver: (
+    vehicleId: number,
+    payload: { person_id: number; role: "primary" | "secondary"; start_date?: string | null; note?: string | null },
+  ) =>
+    apiRequest<{ driver: VehicleDriver; warnings: string[] }>(`/api/vehicles/${vehicleId}/drivers`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateVehicleDriver: (
+    driverId: number,
+    payload: { role?: "primary" | "secondary"; start_date?: string | null; note?: string | null },
+  ) => apiRequest<VehicleDriver>(`/api/vehicle-drivers/${driverId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  removeVehicleDriver: (driverId: number) =>
+    apiRequest<{ removed: boolean }>(`/api/vehicle-drivers/${driverId}`, { method: "DELETE" }),
+
+  getPersonLicense: (personId: number) => apiRequest<PersonLicense>(`/api/people/${personId}/license`),
+  getPersonLicenses: () => apiRequest<PersonLicense[]>("/api/person-licenses"),
+  upsertPersonLicense: (personId: number, payload: Omit<PersonLicense, "person_id">) =>
+    apiRequest<PersonLicense>(`/api/people/${personId}/license`, {
+      method: "POST",
+      body: JSON.stringify({ person_id: personId, ...payload }),
+    }),
+
+  createVehiclePolicy: (
+    vehicleId: number,
+    payload: Omit<InsurancePolicy, "id" | "vehicle_id" | "driver_snapshot" | "status">,
+  ) =>
+    apiRequest<{ policy: InsurancePolicy; warnings: string[] }>(`/api/vehicles/${vehicleId}/policies`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateVehiclePolicy: (policyId: number, payload: Partial<Omit<InsurancePolicy, "id" | "vehicle_id" | "driver_snapshot">>) =>
+    apiRequest<InsurancePolicy>(`/api/insurance-policies/${policyId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteVehiclePolicy: (policyId: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/insurance-policies/${policyId}`, { method: "DELETE" }),
+
+  createVehicleMaintenance: (vehicleId: number, payload: Omit<VehicleMaintenance, "id" | "vehicle_id">) =>
+    apiRequest<VehicleMaintenance>(`/api/vehicles/${vehicleId}/maintenances`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateVehicleMaintenance: (id: number, payload: Partial<Omit<VehicleMaintenance, "id" | "vehicle_id">>) =>
+    apiRequest<VehicleMaintenance>(`/api/vehicle-maintenances/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteVehicleMaintenance: (id: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/vehicle-maintenances/${id}`, { method: "DELETE" }),
+
+  createVehicleRepair: (vehicleId: number, payload: Omit<VehicleRepair, "id" | "vehicle_id">) =>
+    apiRequest<VehicleRepair>(`/api/vehicles/${vehicleId}/repairs`, { method: "POST", body: JSON.stringify(payload) }),
+  updateVehicleRepair: (id: number, payload: Partial<Omit<VehicleRepair, "id" | "vehicle_id">>) =>
+    apiRequest<VehicleRepair>(`/api/vehicle-repairs/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteVehicleRepair: (id: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/vehicle-repairs/${id}`, { method: "DELETE" }),
+
+  createVehicleAccident: (vehicleId: number, payload: Omit<VehicleAccident, "id" | "vehicle_id">) =>
+    apiRequest<{ accident: VehicleAccident; warnings: string[] }>(`/api/vehicles/${vehicleId}/accidents`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateVehicleAccident: (id: number, payload: Partial<Omit<VehicleAccident, "id" | "vehicle_id">>) =>
+    apiRequest<{ accident: VehicleAccident; warnings: string[] }>(`/api/vehicle-accidents/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteVehicleAccident: (id: number) =>
+    apiRequest<{ deleted: boolean }>(`/api/vehicle-accidents/${id}`, { method: "DELETE" }),
 
   getUtilityBills: () => apiRequest<UtilityBill[]>("/api/utility-bills"),
   createUtilityBill: (payload: NewUtilityBill) =>

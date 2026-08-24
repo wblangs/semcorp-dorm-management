@@ -1,0 +1,1097 @@
+<title>车辆管理 V2 设计稿</title>
+<style>
+  :root {
+    --ground: #f1f5f9;
+    --paper: #ffffff;
+    --line: #e2e8f0;
+    --line-soft: #f1f5f9;
+    --ink: #0f172a;
+    --ink-2: #334155;
+    --muted: #64748b;
+    --muted-2: #94a3b8;
+    --accent: #4f46e5;
+    --accent-soft: #eef2ff;
+    --danger: #e11d48;
+    --danger-soft: #fff1f2;
+    --warn: #b45309;
+    --warn-soft: #fffbeb;
+    --ok: #059669;
+    --ok-soft: #ecfdf5;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 96px; }
+
+  /* ---------- doc header ---------- */
+  .doc-head { padding: 56px 0 28px; display: flex; flex-direction: column; gap: 14px; }
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .doc-head h1 {
+    margin: 0; font-size: 34px; line-height: 1.2; font-weight: 700;
+    letter-spacing: -.02em; text-wrap: balance; color: var(--ink);
+  }
+  .doc-head p { margin: 0; max-width: 62ch; color: var(--ink-2); }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .meta span {
+    font-size: 12px; font-weight: 500; color: var(--muted);
+    background: var(--paper); border: 1px solid var(--line);
+    border-radius: 6px; padding: 3px 9px;
+  }
+  .meta span b { color: var(--ink-2); font-weight: 600; }
+
+  /* ---------- sticky index ---------- */
+  .index {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 12px 0; margin-bottom: 8px;
+    background: color-mix(in srgb, var(--ground) 90%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .index a {
+    font-size: 13px; font-weight: 500; text-decoration: none; color: var(--muted);
+    background: var(--paper); border: 1px solid var(--line);
+    border-radius: 8px; padding: 5px 11px;
+  }
+  .index a:hover { color: var(--ink); border-color: var(--muted-2); }
+  .index a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- screen block ---------- */
+  .screen { padding-top: 44px; display: flex; flex-direction: column; gap: 14px; }
+  .screen-head { display: flex; flex-direction: column; gap: 8px; }
+  .screen-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+  .screen-title h2 {
+    margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.01em; color: var(--ink);
+  }
+  .route {
+    font-family: var(--mono); font-size: 12.5px; color: var(--accent);
+    background: var(--accent-soft); border-radius: 6px; padding: 2px 8px;
+  }
+  .screen-note { margin: 0; max-width: 76ch; color: var(--muted); font-size: 14px; }
+
+  /* ---------- fake app frame ---------- */
+  .app {
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: var(--ground); box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 8px 24px -12px rgba(15,23,42,.15);
+  }
+  .app-bar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 16px; background: var(--paper); border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+  .brand i {
+    display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px;
+    background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; font-style: normal;
+  }
+  .brand b { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .app-nav { display: flex; flex-wrap: wrap; gap: 2px; overflow-x: auto; }
+  .app-nav span {
+    font-size: 12.5px; font-weight: 500; color: var(--muted);
+    padding: 5px 9px; border-radius: 7px; white-space: nowrap;
+  }
+  .app-nav span.on { background: var(--accent); color: #fff; }
+  .app-nav span.new { color: var(--accent); background: var(--accent-soft); }
+  .app-user { margin-left: auto; font-size: 12.5px; color: var(--muted-2); white-space: nowrap; }
+  .app-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+  .page-h { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--paper); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px;
+  }
+  .card-h {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .card-h h4 { margin: 0; font-size: 14px; font-weight: 650; }
+  .card-h .hint { font-size: 12px; color: var(--muted-2); margin-left: auto; }
+
+  /* ---------- form bits ---------- */
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .inp {
+    display: inline-flex; align-items: center;
+    background: var(--paper); border: 1px solid #cbd5e1; border-radius: 8px;
+    padding: 7px 11px; font-size: 13px; color: var(--ink); min-width: 150px;
+  }
+  .inp.ph { color: var(--muted-2); }
+  .inp.sel::after { content: "▾"; color: var(--muted-2); margin-left: auto; padding-left: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 500;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  .btn.ghost { background: var(--paper); border-color: #cbd5e1; color: var(--ink-2); }
+  .btn.sm { padding: 3px 9px; font-size: 12px; border-radius: 6px; }
+  .btn.danger { background: var(--paper); border-color: #fecdd3; color: var(--danger); }
+  .push { margin-left: auto; }
+
+  .field-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px 18px;
+  }
+  .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .field label {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .field .val { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .field .val.mono { font-family: var(--mono); font-size: 13px; }
+  .field .val.dim { color: var(--muted-2); }
+  .field .req::after { content: " *"; color: var(--danger); }
+
+  /* ---------- tables ---------- */
+  .t-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; font-size: 10.5px; font-weight: 650; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 9px 12px; background: #f8fafc; border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 10px 12px; border-bottom: 1px solid var(--line-soft);
+    color: var(--ink-2); vertical-align: middle; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr.flag { background: var(--warn-soft); }
+  td.plate { font-weight: 650; color: var(--accent); }
+  td .sub { display: block; font-size: 11.5px; color: var(--muted-2); font-variant-numeric: normal; }
+  td.mono, .mono-txt { font-family: var(--mono); font-size: 12.5px; }
+  td.num { text-align: right; }
+  th.num { text-align: right; }
+
+  /* ---------- chips ---------- */
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11.5px; font-weight: 600; border-radius: 999px;
+    padding: 2px 9px; border: 1px solid transparent; white-space: nowrap;
+    font-variant-numeric: normal;
+  }
+  .chip.neutral { background: #f1f5f9; color: var(--ink-2); border-color: var(--line); }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); border-color: #a7f3d0; }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: #fde68a; }
+  .chip.bad { background: var(--danger-soft); color: var(--danger); border-color: #fecdd3; }
+  .chip.acc { background: var(--accent-soft); color: var(--accent); border-color: #c7d2fe; }
+  .chip.tiny { font-size: 10.5px; padding: 1px 6px; }
+  .date-warn { color: var(--warn); font-weight: 600; }
+  .date-bad { color: var(--danger); font-weight: 600; }
+  .days { font-size: 11px; color: var(--muted-2); font-weight: 500; }
+
+  /* ---------- vehicle hero ---------- */
+  .hero { display: flex; flex-direction: column; gap: 16px; }
+  .hero-top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .hero-plate {
+    font-size: 26px; font-weight: 700; letter-spacing: -.01em;
+    font-family: var(--mono); color: var(--ink);
+  }
+  .hero-sub { font-size: 13.5px; color: var(--muted); }
+  .hero-stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  }
+  .hero-stat { background: var(--paper); padding: 11px 13px; display: flex; flex-direction: column; gap: 2px; }
+  .hero-stat label {
+    font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+  }
+  .hero-stat .v { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .hero-stat .n { font-size: 11.5px; color: var(--muted-2); }
+
+  /* ---------- tabs ---------- */
+  .tabs {
+    display: flex; gap: 2px; overflow-x: auto;
+    border-bottom: 1px solid var(--line); padding-bottom: 0;
+  }
+  .tabs button {
+    appearance: none; background: none; border: 0; border-bottom: 2px solid transparent;
+    font-family: inherit; font-size: 13.5px; font-weight: 550; color: var(--muted);
+    padding: 8px 13px 9px; cursor: pointer; white-space: nowrap;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+  .tabs button .badge {
+    display: inline-block; margin-left: 5px; font-size: 10.5px; font-weight: 650;
+    background: #f1f5f9; color: var(--muted); border-radius: 999px; padding: 0 6px;
+  }
+  .tabs button[aria-selected="true"] .badge { background: var(--accent-soft); color: var(--accent); }
+  .panel { display: none; padding-top: 14px; flex-direction: column; gap: 14px; }
+  .panel.on { display: flex; }
+  .panel > .card-h { margin-bottom: 0; }
+
+  /* ---------- driver cards ---------- */
+  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .driver { border: 1px solid var(--line); border-radius: 10px; padding: 13px; background: var(--paper); }
+  .driver.empty { border-style: dashed; display: grid; place-items: center; min-height: 132px; text-align: center; }
+  .driver-top { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+  .driver-id { display: flex; flex-direction: column; min-width: 0; }
+  .avatar {
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 650;
+  }
+  .driver-name { font-size: 15px; font-weight: 650; line-height: 1.3; }
+  .driver-dept { font-size: 12px; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  /* ---------- notice strip ---------- */
+  .strip {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    border-radius: 10px; padding: 11px 13px; font-size: 13px; border: 1px solid;
+  }
+  .strip.warn { background: var(--warn-soft); border-color: #fde68a; color: #92400e; }
+  .strip.bad { background: var(--danger-soft); border-color: #fecdd3; color: #9f1239; }
+  .strip.acc { background: var(--accent-soft); border-color: #c7d2fe; color: #3730a3; }
+  .strip b { font-weight: 650; }
+
+  /* ---------- mileage bar ---------- */
+  .bar-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .bar-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bar { height: 7px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; background: #f59e0b; }
+
+  /* ---------- claim stepper ---------- */
+  .steps { display: flex; flex-wrap: wrap; gap: 0; align-items: flex-start; }
+  .step { display: flex; align-items: flex-start; gap: 0; }
+  .step-body { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 84px; text-align: center; }
+  .step-body i.dot {
+    width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center;
+    font-size: 11px; font-style: normal; font-weight: 700; background: #e2e8f0; color: var(--muted);
+  }
+  .step.done .step-body i.dot { background: var(--accent); color: #fff; }
+  .step.now .step-body i.dot { background: var(--ok); color: #fff; }
+  .step-body span { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+  .step.done .step-body span, .step.now .step-body span { color: var(--ink-2); font-weight: 600; }
+  .step-line { width: 26px; height: 2px; background: #e2e8f0; margin-top: 10px; }
+  .step-line.done { background: var(--accent); }
+
+  /* ---------- timeline ---------- */
+  .tl { display: flex; flex-direction: column; gap: 0; }
+  .tl-item { display: grid; grid-template-columns: 14px 1fr; gap: 14px; }
+  .tl-rail { display: flex; flex-direction: column; align-items: center; }
+  .tl-rail i { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); margin-top: 7px; flex-shrink: 0; }
+  .tl-rail u { flex: 1; width: 2px; background: var(--line); text-decoration: none; }
+  .tl-body { padding-bottom: 16px; display: flex; flex-direction: column; gap: 9px; }
+  .tl-when { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* ---------- dashboard stat cards ---------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .stat {
+    background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 14px; display: flex; flex-direction: column; gap: 3px;
+  }
+  .stat:hover { border-color: #c7d2fe; }
+  .stat label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .stat .v { font-size: 25px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .stat .v.bad { color: var(--danger); }
+  .stat .v.warn { color: #d97706; }
+  .stat .link { font-size: 11.5px; color: var(--accent); font-weight: 500; }
+
+  /* ---------- alert group ---------- */
+  .grp-h { display: flex; align-items: center; gap: 9px; margin: 4px 0 2px; }
+  .grp-h h4 { margin: 0; font-size: 14px; font-weight: 650; }
+  .grp-h .rule { flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- modal mock ---------- */
+  .modal-scrim {
+    background: rgba(15,23,42,.28); padding: 26px 16px; display: grid; place-items: start center;
+  }
+  .modal {
+    background: var(--paper); border-radius: 14px; width: 100%; max-width: 660px;
+    box-shadow: 0 24px 48px -18px rgba(15,23,42,.4); overflow: hidden;
+  }
+  .modal-h {
+    display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line);
+  }
+  .modal-h h4 { margin: 0; font-size: 15px; font-weight: 650; }
+  .modal-h .x { margin-left: auto; color: var(--muted-2); font-size: 17px; }
+  .modal-b { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+  .modal-f { padding: 13px 18px; border-top: 1px solid var(--line); display: flex; gap: 9px; justify-content: flex-end; background: #f8fafc; }
+  .group-label {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--accent);
+  }
+  .group-label .rule { flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- closing notes ---------- */
+  .notes { padding-top: 52px; display: flex; flex-direction: column; gap: 16px; }
+  .notes h2 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.01em; }
+  .qlist { display: flex; flex-direction: column; gap: 10px; counter-reset: q; }
+  .q {
+    background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+    padding: 13px 15px; display: grid; grid-template-columns: 22px 1fr; gap: 12px;
+  }
+  .q::before {
+    counter-increment: q; content: counter(q);
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    background: var(--accent-soft); border-radius: 6px; display: grid; place-items: center;
+    height: 22px;
+  }
+  .q p { margin: 0; font-size: 14px; }
+  .q p + p { margin-top: 4px; font-size: 13px; color: var(--muted); }
+  .foot { padding-top: 34px; font-size: 12.5px; color: var(--muted-2); border-top: 1px solid var(--line); margin-top: 34px; }
+
+  @media (max-width: 720px) {
+    .doc-head h1 { font-size: 27px; }
+    .app-body { padding: 13px; }
+    .hero-plate { font-size: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="doc-head">
+    <div class="eyebrow">设计定稿 · 决策已全部确认</div>
+    <h1>车辆管理 V2</h1>
+    <p>把现在的单表车辆档案拆成「档案 + 台账」结构：保单与续保历史、保养、修理、事故理赔各自成账，车辆挂两位被保险人并带驾照信息，归属宿舍带调拨历史。以下是各页面的界面原型，详情页的分页可以直接点。</p>
+    <div class="meta">
+      <span>目标版本 <b>v0.8-vehicle-v2</b></span>
+      <span>当前基线 <b>f7c087e</b></span>
+      <span>线上车辆数据 <b>0 条</b>，无迁移包袱</span>
+      <span>示例数据均为虚构</span>
+    </div>
+  </header>
+
+  <nav class="index" aria-label="屏幕索引">
+    <a href="#s1">1 车辆列表</a>
+    <a href="#s2">2 车辆详情</a>
+    <a href="#s3">3 车辆提醒</a>
+    <a href="#s4">4 Dashboard</a>
+    <a href="#s5">5 驾照信息</a>
+    <a href="#notes">决策记录</a>
+  </nav>
+
+  <!-- ============ SCREEN 1 ============ -->
+  <section class="screen" id="s1">
+    <div class="screen-head">
+      <div class="screen-title">
+        <h2>1 · 车辆列表</h2>
+        <span class="route">/vehicles</span>
+      </div>
+      <p class="screen-note">一屏回答「哪辆车需要处理」。到期日直接染色：红＝已过期，橙＝30 天内，灰＝正常。车牌后的「租」标记产权形式，避免为此多占一列。缺失项（未上保险、未挂靠、未分配宿舍）同样标红，因为漏录和过期一样需要处理。</p>
+    </div>
+
+    <div class="app">
+      <div class="app-bar">
+        <div class="brand"><i>宿</i><b>宿舍管理系统</b></div>
+        <div class="app-nav">
+          <span>Dashboard</span><span>宿舍</span><span>房间</span><span>人员</span>
+          <span>入住分配</span><span class="on">车辆</span><span class="new">车辆提醒</span><span>水电房费</span>
+        </div>
+        <div class="app-user">吴晨君 · admin</div>
+      </div>
+      <div class="app-body">
+        <h3 class="page-h">车辆管理</h3>
+
+        <div class="filters">
+          <span class="inp ph">搜索车牌 / 品牌 / 驾驶人</span>
+          <span class="inp sel">全部状态</span>
+          <span class="inp sel">全部宿舍</span>
+          <span class="inp sel">全部产权</span>
+          <span class="push"></span>
+          <span class="btn">新增车辆</span>
+        </div>
+
+        <div class="t-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>车牌</th><th>品牌车型</th><th>类型 / 座位</th><th>常驻宿舍</th><th>挂靠人</th>
+                <th>保险到期</th><th>年检到期</th><th>下次保养</th><th class="num">里程</th><th>状态</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="plate">JVK-4172</td>
+                <td>Toyota Sienna<span class="sub">2023 年款 · 银</span></td>
+                <td>Van / 7</td>
+                <td>1 号宿舍</td>
+                <td>张伟 · 李强</td>
+                <td><span class="date-warn">2026-09-15</span><span class="sub days">29 天后</span></td>
+                <td>2027-03-02</td>
+                <td><span class="date-warn">2026-08-30</span><span class="sub days">13 天后 / 50,000 mi</span></td>
+                <td class="num">48,200</td>
+                <td><span class="chip ok">可用</span></td>
+                <td><span class="btn ghost sm">详情</span></td>
+              </tr>
+              <tr>
+                <td class="plate">HRT-8830</td>
+                <td>Honda Odyssey<span class="sub">2022 年款 · 白</span></td>
+                <td>Van / 7</td>
+                <td>2 号宿舍</td>
+                <td>王磊 · 赵敏</td>
+                <td>2027-01-20</td>
+                <td><span class="date-bad">2026-08-12</span><span class="sub days">已过期 5 天</span></td>
+                <td>2026-11-05</td>
+                <td class="num">61,540</td>
+                <td><span class="chip ok">可用</span></td>
+                <td><span class="btn ghost sm">详情</span></td>
+              </tr>
+              <tr class="flag">
+                <td class="plate">LPD-2291</td>
+                <td>Toyota RAV4<span class="sub">2024 年款 · 灰</span></td>
+                <td>SUV / 5</td>
+                <td>1 号宿舍</td>
+                <td>陈昊</td>
+                <td>2026-12-01</td>
+                <td>2027-05-18</td>
+                <td>2026-10-22</td>
+                <td class="num">12,870</td>
+                <td><span class="chip warn">在修</span></td>
+                <td><span class="btn ghost sm">详情</span></td>
+              </tr>
+              <tr>
+                <td class="plate">QMB-5507 <span class="chip acc tiny">租</span></td>
+                <td>Ford Transit<span class="sub">2021 年款 · 白</span></td>
+                <td>Van / 12</td>
+                <td>3 号宿舍</td>
+                <td>刘洋 · 孙宁</td>
+                <td>2026-10-08</td>
+                <td>2026-09-25</td>
+                <td><span class="date-warn">2026-09-02</span><span class="sub days">16 天后 / 90,000 mi</span></td>
+                <td class="num">88,310</td>
+                <td><span class="chip ok">可用</span></td>
+                <td><span class="btn ghost sm">详情</span></td>
+              </tr>
+              <tr>
+                <td class="plate">TSN-6614</td>
+                <td>Nissan Altima<span class="sub">2023 年款 · 黑</span></td>
+                <td>Sedan / 5</td>
+                <td><span class="chip bad">未分配</span></td>
+                <td><span class="chip bad">未挂靠</span></td>
+                <td><span class="chip bad">未上保险</span></td>
+                <td>2027-02-11</td>
+                <td>2027-01-15</td>
+                <td class="num">3,420</td>
+                <td><span class="chip neutral">停用</span></td>
+                <td><span class="btn ghost sm">详情</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 2 ============ -->
+  <section class="screen" id="s2">
+    <div class="screen-head">
+      <div class="screen-title">
+        <h2>2 · 车辆详情</h2>
+        <span class="route">/vehicles/:id</span>
+      </div>
+      <p class="screen-note">概览卡把最常被问的四件事顶到最上面（保险、年检、下次保养、里程），台账收进分页。分页标题上的数字是记录条数，让人不用点进去就知道哪里有内容。下面 7 个分页可以点。</p>
+    </div>
+
+    <div class="app">
+      <div class="app-bar">
+        <div class="brand"><i>宿</i><b>宿舍管理系统</b></div>
+        <div class="app-nav">
+          <span>Dashboard</span><span>宿舍</span><span>房间</span><span>人员</span>
+          <span>入住分配</span><span class="on">车辆</span><span class="new">车辆提醒</span><span>水电房费</span>
+        </div>
+        <div class="app-user">吴晨君 · admin</div>
+      </div>
+      <div class="app-body">
+
+        <div class="card hero">
+          <div class="hero-top">
+            <span class="hero-plate">JVK-4172</span>
+            <span class="chip ok">可用</span>
+            <span class="chip neutral">自购</span>
+            <span class="chip neutral">Van · 7 座</span>
+            <span class="push"></span>
+            <span class="btn ghost sm">调拨宿舍</span>
+            <span class="btn ghost sm">更新里程</span>
+            <span class="btn sm">编辑档案</span>
+          </div>
+          <div class="hero-sub">Toyota Sienna 2023 · 银色 · 常驻 1 号宿舍（自 2025-06-01）</div>
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <label>保险到期</label>
+              <span class="v date-warn">2026-09-15</span>
+              <span class="n">29 天后 · Progressive</span>
+            </div>
+            <div class="hero-stat">
+              <label>年检到期</label>
+              <span class="v">2027-03-02</span>
+              <span class="n">197 天后</span>
+            </div>
+            <div class="hero-stat">
+              <label>下次保养</label>
+              <span class="v date-warn">2026-08-30</span>
+              <span class="n">13 天后 或 50,000 mi</span>
+            </div>
+            <div class="hero-stat">
+              <label>当前里程</label>
+              <span class="v">48,200 <span class="n">mi</span></span>
+              <span class="n">更新于 2026-08-14</span>
+            </div>
+            <div class="hero-stat">
+              <label>注册到期</label>
+              <span class="v">2027-01-31</span>
+              <span class="n">PA · 167 天后</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tabs" role="tablist">
+            <button role="tab" aria-selected="true" data-tab="t-file">基本档案</button>
+            <button role="tab" aria-selected="false" data-tab="t-driver">挂靠人<span class="badge">2</span></button>
+            <button role="tab" aria-selected="false" data-tab="t-ins">保险<span class="badge">3</span></button>
+            <button role="tab" aria-selected="false" data-tab="t-maint">保养<span class="badge">4</span></button>
+            <button role="tab" aria-selected="false" data-tab="t-repair">修理<span class="badge">2</span></button>
+            <button role="tab" aria-selected="false" data-tab="t-acc">事故与理赔<span class="badge">1</span></button>
+            <button role="tab" aria-selected="false" data-tab="t-move">宿舍调拨<span class="badge">2</span></button>
+          </div>
+
+          <!-- 基本档案 -->
+          <div class="panel on" id="t-file" role="tabpanel">
+            <div class="field-grid">
+              <div class="field"><label>车牌号</label><span class="val mono">JVK-4172</span></div>
+              <div class="field"><label>车架号 VIN</label><span class="val mono">5TDKRKEC7PS148820</span></div>
+              <div class="field"><label>品牌</label><span class="val">Toyota</span></div>
+              <div class="field"><label>车型</label><span class="val">Sienna</span></div>
+              <div class="field"><label>年款</label><span class="val">2023</span></div>
+              <div class="field"><label>颜色</label><span class="val">银</span></div>
+              <div class="field"><label>车辆类型</label><span class="val">Van</span></div>
+              <div class="field"><label>座位数</label><span class="val">7</span></div>
+              <div class="field"><label>产权形式</label><span class="val">自购</span></div>
+              <div class="field"><label>购置日期</label><span class="val">2023-04-11</span></div>
+              <div class="field"><label>购置金额</label><span class="val">$38,600</span></div>
+              <div class="field"><label>注册到期</label><span class="val">2027-01-31</span></div>
+              <div class="field"><label>年检到期</label><span class="val">2027-03-02</span></div>
+              <div class="field"><label>保养间隔</label><span class="val">5,000 mi / 6 个月</span></div>
+              <div class="field"><label>常驻宿舍</label><span class="val">1 号宿舍</span></div>
+              <div class="field"><label>状态</label><span class="val">可用</span></div>
+            </div>
+            <div class="strip acc">
+              <b>保险到期、下次保养、常驻宿舍</b>这三项由保单、保养台账和调拨记录自动算出，不能在这里直接改——改了会被下一次台账写入覆盖。
+            </div>
+          </div>
+
+          <!-- 挂靠人 -->
+          <div class="panel" id="t-driver" role="tabpanel">
+            <div class="strip warn">
+              <span>李强的驾照 <b>2026-09-08</b> 到期（22 天后），到期后需更新驾照信息或更换被保险人。</span>
+            </div>
+            <div class="duo">
+              <div class="driver">
+                <div class="driver-top">
+                  <span class="avatar">张伟</span>
+                  <span class="driver-id">
+                    <span class="driver-name">张伟</span>
+                    <span class="driver-dept">生产 · Employee</span>
+                  </span>
+                  <span class="push"></span>
+                  <span class="chip acc">主要驾驶人</span>
+                </div>
+                <dl class="kv">
+                  <dt>驾照号</dt><dd class="mono-txt">28 194 55731</dd>
+                  <dt>签发州 / 类别</dt><dd>PA · Class C</dd>
+                  <dt>驾照到期</dt><dd>2029-05-20 <span class="chip ok tiny">有效</span></dd>
+                  <dt>挂靠起始</dt><dd>2025-06-01</dd>
+                </dl>
+              </div>
+              <div class="driver">
+                <div class="driver-top">
+                  <span class="avatar">李强</span>
+                  <span class="driver-id">
+                    <span class="driver-name">李强</span>
+                    <span class="driver-dept">设备 · Employee</span>
+                  </span>
+                  <span class="push"></span>
+                  <span class="chip neutral">第二驾驶人</span>
+                </div>
+                <dl class="kv">
+                  <dt>驾照号</dt><dd class="mono-txt">31 007 22418</dd>
+                  <dt>签发州 / 类别</dt><dd>PA · Class C</dd>
+                  <dt>驾照到期</dt><dd><span class="date-warn">2026-09-08</span> <span class="chip warn tiny">22 天</span></dd>
+                  <dt>挂靠起始</dt><dd>2025-11-14</dd>
+                </dl>
+              </div>
+            </div>
+            <div class="card-h">
+              <h4>挂靠历史</h4>
+              <span class="hint">换人不删记录，保留历史</span>
+            </div>
+            <div class="t-scroll">
+              <table>
+                <thead><tr><th>人员</th><th>角色</th><th>起始</th><th>结束</th><th>状态</th><th>备注</th></tr></thead>
+                <tbody>
+                  <tr><td>张伟</td><td>主要驾驶人</td><td>2025-06-01</td><td>—</td><td><span class="chip ok">挂靠中</span></td><td>—</td></tr>
+                  <tr><td>李强</td><td>第二驾驶人</td><td>2025-11-14</td><td>—</td><td><span class="chip ok">挂靠中</span></td><td>—</td></tr>
+                  <tr><td>王磊</td><td>第二驾驶人</td><td>2025-06-01</td><td>2025-11-13</td><td><span class="chip neutral">已解除</span></td><td>调至 2 号宿舍</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 保险 -->
+          <div class="panel" id="t-ins" role="tabpanel">
+            <div class="card" style="border-color:#c7d2fe;background:#fbfbff">
+              <div class="card-h">
+                <h4>当前保单</h4>
+                <span class="chip ok">生效中</span>
+                <span class="hint">续保后本张自动转为「已到期」</span>
+              </div>
+              <div class="field-grid">
+                <div class="field"><label>保险公司</label><span class="val">Progressive</span></div>
+                <div class="field"><label>保单号</label><span class="val mono">PA-9F4L-220871</span></div>
+                <div class="field"><label>险种</label><span class="val">Full Coverage</span></div>
+                <div class="field"><label>保额</label><span class="val">$300,000</span></div>
+                <div class="field"><label>免赔额</label><span class="val">$500</span></div>
+                <div class="field"><label>保费</label><span class="val">$1,860 / 年</span></div>
+                <div class="field"><label>起保日</label><span class="val">2025-09-16</span></div>
+                <div class="field"><label>到期日</label><span class="val date-warn">2026-09-15</span></div>
+                <div class="field"><label>承保驾驶人</label><span class="val">张伟、李强</span></div>
+                <div class="field"><label>保单文件</label><span class="val dim">保单 PDF 暂存共享盘 \\fs01\vehicle</span></div>
+              </div>
+            </div>
+            <div class="card-h">
+              <h4>续保历史</h4>
+              <span class="push"></span>
+              <span class="btn sm">登记续保</span>
+            </div>
+            <div class="t-scroll">
+              <table>
+                <thead><tr><th>保险公司</th><th>保单号</th><th>险种</th><th class="num">保费</th><th>起保</th><th>到期</th><th>承保驾驶人</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td>Progressive</td><td class="mono">PA-9F4L-220871</td><td>Full Coverage</td><td class="num">$1,860</td>
+                    <td>2025-09-16</td><td>2026-09-15</td><td>张伟、李强</td><td><span class="chip ok">生效中</span></td>
+                  </tr>
+                  <tr>
+                    <td>Progressive</td><td class="mono">PA-9F4L-188032</td><td>Full Coverage</td><td class="num">$1,742</td>
+                    <td>2024-09-16</td><td>2025-09-15</td><td>张伟、王磊</td><td><span class="chip neutral">已到期</span></td>
+                  </tr>
+                  <tr>
+                    <td>GEICO</td><td class="mono">GC-77120944</td><td>Liability</td><td class="num">$1,105</td>
+                    <td>2023-04-11</td><td>2024-09-15</td><td>张伟</td><td><span class="chip neutral">已到期</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="strip acc">
+              <span><b>承保驾驶人</b>是登记保单那一刻的挂靠人姓名快照，只作历史追溯，不参与任何校验——所以 2024 年那张保单上仍是王磊。</span>
+            </div>
+          </div>
+
+          <!-- 保养 -->
+          <div class="panel" id="t-maint" role="tabpanel">
+            <div class="strip warn">
+              <span>下次保养 <b>2026-08-30</b>（13 天后）或 <b>50,000 mi</b>，当前 48,200 mi，还剩 1,800 mi。</span>
+            </div>
+            <div class="card">
+              <div class="bar-wrap">
+                <div class="bar-labels"><span>上次保养 45,000 mi</span><span>96%</span><span>下次 50,000 mi</span></div>
+                <div class="bar"><i style="width:96%"></i></div>
+                <div class="bar-labels"><span>当前 48,200 mi</span><span>里程达到间隔 90% 时触发提醒</span></div>
+              </div>
+            </div>
+            <div class="card-h">
+              <h4>保养台账</h4>
+              <span class="push"></span>
+              <span class="btn sm">新增保养</span>
+            </div>
+            <div class="t-scroll">
+              <table>
+                <thead><tr><th>保养日期</th><th class="num">里程</th><th>项目</th><th>门店</th><th class="num">费用</th><th>发票号</th><th>下次到期</th></tr></thead>
+                <tbody>
+                  <tr><td>2026-02-28</td><td class="num">45,000</td><td>换机油 · 换机油滤 · 四轮定位</td><td>Toyota of Reading</td><td class="num">$268</td><td class="mono">INV-40912</td><td>2026-08-30 / 50,000</td></tr>
+                  <tr><td>2025-08-19</td><td class="num">39,880</td><td>换机油 · 换空气滤 · 刹车片</td><td>Toyota of Reading</td><td class="num">$612</td><td class="mono">INV-37744</td><td>2026-02-19 / 44,880</td></tr>
+                  <tr><td>2025-03-04</td><td class="num">34,120</td><td>换机油 · 轮胎更换 ×4</td><td>Mavis Tire</td><td class="num">$948</td><td class="mono">MV-88213</td><td>2025-09-04 / 39,120</td></tr>
+                  <tr><td>2024-09-10</td><td class="num">28,600</td><td>换机油 · 换机油滤</td><td>Toyota of Reading</td><td class="num">$204</td><td class="mono">INV-33018</td><td>2025-03-10 / 33,600</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="strip acc">
+              <span>保存保养记录时，若填的里程大于车辆当前里程，会同时更新车辆里程，并按「保养日期 + 6 个月」和「里程 + 5,000」自动推算下次到期。</span>
+            </div>
+          </div>
+
+          <!-- 修理 -->
+          <div class="panel" id="t-repair" role="tabpanel">
+            <div class="card-h">
+              <h4>修理台账</h4>
+              <span class="hint">状态为「在修」且影响用车时，车辆状态自动变为在修</span>
+              <span class="push"></span>
+              <span class="btn sm">新增报修</span>
+            </div>
+            <div class="t-scroll">
+              <table>
+                <thead><tr><th>报修</th><th>送修</th><th>取车</th><th>停用</th><th>故障 / 维修内容</th><th>修理厂</th><th class="num">费用</th><th>承担方</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td>2026-04-19</td><td>2026-04-22</td><td>2026-05-06</td><td>14 天</td>
+                    <td>右前门与前翼子板碰撞变形<span class="sub">钣金修复、翼子板更换、整车补漆</span></td>
+                    <td>Berks Collision</td><td class="num">$4,280</td><td><span class="chip acc">保险</span></td>
+                    <td><span class="chip ok">已完成</span></td>
+                  </tr>
+                  <tr>
+                    <td>2025-12-02</td><td>2025-12-02</td><td>2025-12-02</td><td>当天</td>
+                    <td>电瓶无法启动<span class="sub">更换电瓶</span></td>
+                    <td>Toyota of Reading</td><td class="num">$236</td><td><span class="chip neutral">公司</span></td>
+                    <td><span class="chip ok">已完成</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="strip acc">
+              <span>第一张单关联了 2026-04-18 的事故，费用承担方为保险 —— 在<b>事故与理赔</b>分页可以看到对应的理赔进度。停用天数由送修与取车日期直接算出，不额外存字段。</span>
+            </div>
+          </div>
+
+          <!-- 事故与理赔 -->
+          <div class="panel" id="t-acc" role="tabpanel">
+            <div class="card-h">
+              <h4>事故记录</h4>
+              <span class="push"></span>
+              <span class="btn sm">新增事故</span>
+            </div>
+            <div class="tl">
+              <div class="tl-item">
+                <div class="tl-rail"><i></i><u></u></div>
+                <div class="tl-body">
+                  <div class="tl-when">2026-04-18 17:40 · Route 222 & Broadcasting Rd, Reading PA</div>
+                  <div class="card">
+                    <div class="card-h">
+                      <h4>双方碰撞</h4>
+                      <span class="chip warn">次要责任</span>
+                      <span class="chip neutral">无人受伤</span>
+                      <span class="push"></span>
+                      <span class="chip ok">理赔已结案</span>
+                    </div>
+                    <div class="field-grid">
+                      <div class="field"><label>当事驾驶人</label><span class="val">李强（第二驾驶人）</span></div>
+                      <div class="field"><label>报案号</label><span class="val mono">RPD-2026-041877</span></div>
+                      <div class="field"><label>定损金额</label><span class="val">$4,280</span></div>
+                      <div class="field"><label>对方信息</label><span class="val">GDL-3391 / M. Reyes / State Farm</span></div>
+                      <div class="field"><label>出险保单</label><span class="val mono">PA-9F4L-220871</span></div>
+                      <div class="field"><label>理赔案号</label><span class="val mono">CLM-88214703</span></div>
+                      <div class="field"><label>索赔金额</label><span class="val">$4,280</span></div>
+                      <div class="field"><label>实际赔付</label><span class="val">$3,780</span></div>
+                      <div class="field"><label>自付免赔</label><span class="val">$500</span></div>
+                      <div class="field"><label>报案 / 结案</label><span class="val">2026-04-19 / 2026-05-12</span></div>
+                    </div>
+                    <div style="height:14px"></div>
+                    <div class="steps">
+                      <div class="step done"><div class="step-body"><i class="dot">✓</i><span>已报案<br>04-19</span></div></div>
+                      <div class="step-line done"></div>
+                      <div class="step done"><div class="step-body"><i class="dot">✓</i><span>定损中<br>04-21</span></div></div>
+                      <div class="step-line done"></div>
+                      <div class="step done"><div class="step-body"><i class="dot">✓</i><span>已核准<br>04-28</span></div></div>
+                      <div class="step-line done"></div>
+                      <div class="step done"><div class="step-body"><i class="dot">✓</i><span>已赔付<br>05-08</span></div></div>
+                      <div class="step-line done"></div>
+                      <div class="step now"><div class="step-body"><i class="dot">✓</i><span>已结案<br>05-12</span></div></div>
+                    </div>
+                    <div style="height:12px"></div>
+                    <div class="strip acc">
+                      <span>关联修理单：<b>2026-04-22 → 05-06 Berks Collision $4,280</b>（承担方：保险）· 车辆停用 14 天</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 宿舍调拨 -->
+          <div class="panel" id="t-move" role="tabpanel">
+            <div class="card-h">
+              <h4>宿舍调拨历史</h4>
+              <span class="hint">同一时间只有一条生效记录，新调拨自动结束旧记录</span>
+              <span class="push"></span>
+              <span class="btn sm">调拨</span>
+            </div>
+            <div class="t-scroll">
+              <table>
+                <thead><tr><th>宿舍</th><th>调入</th><th>调出</th><th>时长</th><th>状态</th><th>原因</th></tr></thead>
+                <tbody>
+                  <tr><td>1 号宿舍</td><td>2025-06-01</td><td>—</td><td>1 年 2 个月</td><td><span class="chip ok">生效中</span></td><td>生产部门用车需求增加</td></tr>
+                  <tr><td>2 号宿舍</td><td>2024-08-15</td><td>2025-05-31</td><td>9 个月</td><td><span class="chip neutral">已结束</span></td><td>初始配车</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="strip acc">
+              <span>宿舍下还有车时不允许删除宿舍——这条现有校验继续生效，删宿舍前必须先把车调走。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 3 ============ -->
+  <section class="screen" id="s3">
+    <div class="screen-head">
+      <div class="screen-title">
+        <h2>3 · 车辆提醒</h2>
+        <span class="route">/vehicle-alerts</span>
+      </div>
+      <p class="screen-note">样式对齐现有「停留风险」页：按紧急度分组，最急的在最上面。每行右侧是可直接执行的动作，不用先跳详情页再找按钮。这一页的数据同时供钉钉提醒使用，两边口径一致。</p>
+    </div>
+
+    <div class="app">
+      <div class="app-bar">
+        <div class="brand"><i>宿</i><b>宿舍管理系统</b></div>
+        <div class="app-nav">
+          <span>Dashboard</span><span>宿舍</span><span>房间</span><span>人员</span>
+          <span>入住分配</span><span>车辆</span><span class="on">车辆提醒</span><span>水电房费</span>
+        </div>
+        <div class="app-user">吴晨君 · admin</div>
+      </div>
+      <div class="app-body">
+        <h3 class="page-h">车辆提醒</h3>
+        <div class="strip acc">
+          <span>钉钉提醒每天 9 点后发送，同一项按 30 / 15 / 7 天三档各提醒一次，不重复打扰。</span>
+          <span class="push"></span>
+          <span class="btn ghost sm">测试发送</span>
+        </div>
+
+        <div class="grp-h"><h4>已过期</h4><span class="chip bad">2</span><span class="rule"></span></div>
+        <div class="t-scroll">
+          <table>
+            <thead><tr><th>车辆</th><th>宿舍</th><th>提醒项</th><th>到期日</th><th>逾期</th><th>负责人</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="plate">HRT-8830<span class="sub">Honda Odyssey</span></td><td>2 号宿舍</td>
+                <td>年检到期</td><td class="date-bad">2026-08-12</td><td class="date-bad">5 天</td><td>王磊</td>
+                <td><span class="btn ghost sm">登记年检</span></td>
+              </tr>
+              <tr>
+                <td class="plate">TSN-6614<span class="sub">Nissan Altima</span></td><td>—</td>
+                <td>未上保险</td><td class="date-bad">—</td><td class="date-bad">档案缺失</td><td>—</td>
+                <td><span class="btn ghost sm">登记保单</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grp-h"><h4>7 天内到期</h4><span class="chip warn">1</span><span class="rule"></span></div>
+        <div class="t-scroll">
+          <table>
+            <thead><tr><th>车辆</th><th>宿舍</th><th>提醒项</th><th>到期日</th><th>剩余</th><th>负责人</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="plate">QMB-5507 <span class="chip acc tiny">租</span><span class="sub">Ford Transit</span></td><td>3 号宿舍</td>
+                <td>租赁合同到期<span class="sub">Enterprise Fleet · $612 / 月</span></td><td class="date-warn">2026-08-24</td><td class="date-warn">7 天</td><td>刘洋</td>
+                <td><span class="btn ghost sm">续租 / 退车</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grp-h"><h4>30 天内到期</h4><span class="chip warn">4</span><span class="rule"></span></div>
+        <div class="t-scroll">
+          <table>
+            <thead><tr><th>车辆</th><th>宿舍</th><th>提醒项</th><th>到期日</th><th>剩余</th><th>负责人</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="plate">JVK-4172<span class="sub">Toyota Sienna</span></td><td>1 号宿舍</td>
+                <td>保养到期<span class="sub">48,200 / 50,000 mi</span></td><td class="date-warn">2026-08-30</td><td class="date-warn">13 天</td><td>张伟</td>
+                <td><span class="btn ghost sm">登记保养</span></td>
+              </tr>
+              <tr>
+                <td class="plate">JVK-4172<span class="sub">Toyota Sienna</span></td><td>1 号宿舍</td>
+                <td>保险到期<span class="sub">Progressive · $1,860 / 年</span></td><td class="date-warn">2026-09-15</td><td class="date-warn">29 天</td><td>张伟</td>
+                <td><span class="btn ghost sm">登记续保</span></td>
+              </tr>
+              <tr>
+                <td class="plate">JVK-4172<span class="sub">Toyota Sienna</span></td><td>1 号宿舍</td>
+                <td>驾照到期<span class="sub">李强 · 第二驾驶人 · PA Class C</span></td><td class="date-warn">2026-09-08</td><td class="date-warn">22 天</td><td>李强</td>
+                <td><span class="btn ghost sm">更新驾照</span></td>
+              </tr>
+              <tr>
+                <td class="plate">QMB-5507 <span class="chip acc tiny">租</span><span class="sub">Ford Transit</span></td><td>3 号宿舍</td>
+                <td>保养到期<span class="sub">88,310 / 90,000 mi</span></td><td class="date-warn">2026-09-02</td><td class="date-warn">16 天</td><td>刘洋</td>
+                <td><span class="btn ghost sm">登记保养</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 4 ============ -->
+  <section class="screen" id="s4">
+    <div class="screen-head">
+      <div class="screen-title">
+        <h2>4 · Dashboard 车辆区块</h2>
+        <span class="route">/</span>
+      </div>
+      <p class="screen-note">沿用现有可点击统计卡模式，每张卡跳到已筛选的列表或提醒页。异常数字用语义色区分：红＝已过期需立刻处理，橙＝临近到期，其余保持中性——只有真正需要动作的数字才染色，否则整片颜色等于没有颜色。</p>
+    </div>
+
+    <div class="app">
+      <div class="app-bar">
+        <div class="brand"><i>宿</i><b>宿舍管理系统</b></div>
+        <div class="app-nav">
+          <span class="on">Dashboard</span><span>宿舍</span><span>房间</span><span>人员</span>
+          <span>入住分配</span><span>车辆</span><span class="new">车辆提醒</span><span>水电房费</span>
+        </div>
+        <div class="app-user">吴晨君 · admin</div>
+      </div>
+      <div class="app-body">
+        <h3 class="page-h">Dashboard</h3>
+        <div class="grp-h"><h4>车辆</h4><span class="rule"></span><span class="chip neutral">共 5 辆</span></div>
+        <div class="stats">
+          <div class="stat"><label>可用车辆</label><span class="v">3</span><span class="link">查看列表 →</span></div>
+          <div class="stat"><label>在修车辆</label><span class="v warn">1</span><span class="link">查看列表 →</span></div>
+          <div class="stat"><label>停用 / 已处置</label><span class="v">1</span><span class="link">查看列表 →</span></div>
+          <div class="stat"><label>保险 30 天内到期</label><span class="v warn">1</span><span class="link">查看提醒 →</span></div>
+          <div class="stat"><label>年检已过期 / 临近</label><span class="v bad">1</span><span class="link">查看提醒 →</span></div>
+          <div class="stat"><label>保养到期</label><span class="v warn">2</span><span class="link">查看提醒 →</span></div>
+          <div class="stat"><label>租赁合同 60 天内到期</label><span class="v warn">1</span><span class="link">查看提醒 →</span></div>
+          <div class="stat"><label>驾照 30 天内到期</label><span class="v warn">1</span><span class="link">查看提醒 →</span></div>
+          <div class="stat"><label>未挂靠被保险人</label><span class="v bad">1</span><span class="link">查看列表 →</span></div>
+          <div class="stat"><label>理赔进行中</label><span class="v">0</span><span class="link">查看事故 →</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 5 ============ -->
+  <section class="screen" id="s5">
+    <div class="screen-head">
+      <div class="screen-title">
+        <h2>5 · 人员驾照信息</h2>
+        <span class="route">/people</span>
+      </div>
+      <p class="screen-note">驾照不另开页面，而是在现有人员编辑弹窗里加一个分组——和现在「签证与停留信息」的做法完全一致（数据结构也同构，主键就是人员 ID）。这样录人和录驾照是同一个动作，不需要记得再去别处补一遍。</p>
+    </div>
+
+    <div class="app">
+      <div class="app-bar">
+        <div class="brand"><i>宿</i><b>宿舍管理系统</b></div>
+        <div class="app-nav">
+          <span>Dashboard</span><span>宿舍</span><span>房间</span><span class="on">人员</span>
+          <span>入住分配</span><span>车辆</span><span class="new">车辆提醒</span><span>水电房费</span>
+        </div>
+        <div class="app-user">吴晨君 · admin</div>
+      </div>
+      <div class="modal-scrim">
+        <div class="modal">
+          <div class="modal-h"><h4>编辑人员 · 李强</h4><span class="x">✕</span></div>
+          <div class="modal-b">
+            <div class="group-label">基本信息<span class="rule"></span></div>
+            <div class="field-grid">
+              <div class="field"><label class="req">中文名</label><span class="inp">李强</span></div>
+              <div class="field"><label>英文名</label><span class="inp">Li Qiang</span></div>
+              <div class="field"><label class="req">部门</label><span class="inp sel">设备</span></div>
+              <div class="field"><label class="req">人员类型</label><span class="inp sel">Employee</span></div>
+              <div class="field"><label class="req">性别</label><span class="inp sel">Male</span></div>
+            </div>
+
+            <div class="group-label">签证与停留信息<span class="rule"></span></div>
+            <div class="field-grid">
+              <div class="field"><label>签证类型</label><span class="inp sel">L1</span></div>
+              <div class="field"><label>入境日期</label><span class="inp">2025-11-02</span></div>
+              <div class="field"><label>计划离开</label><span class="inp">2026-11-01</span></div>
+              <div class="field"><label>最长停留</label><span class="inp">2027-11-01</span></div>
+            </div>
+
+            <div class="group-label">驾照信息 <span class="chip acc tiny">新增</span><span class="rule"></span></div>
+            <div class="field-grid">
+              <div class="field"><label>驾照号</label><span class="inp">31 007 22418</span></div>
+              <div class="field"><label>签发州</label><span class="inp sel">PA</span></div>
+              <div class="field"><label>类别</label><span class="inp sel">Class C</span></div>
+              <div class="field"><label>签发日期</label><span class="inp">2022-09-09</span></div>
+              <div class="field"><label>到期日期</label><span class="inp">2026-09-08</span></div>
+              <div class="field"><label>备注</label><span class="inp ph">选填</span></div>
+            </div>
+            <div class="strip warn">
+              <span>该驾照 <b>22 天</b>后到期，且已挂在 <b>JVK-4172</b> 保险上——到期后车辆提醒页会持续标红。</span>
+            </div>
+          </div>
+          <div class="modal-f"><span class="btn ghost">取消</span><span class="btn">保存</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ NOTES ============ -->
+  <section class="notes" id="notes">
+    <h2>决策记录 · 已全部拍板</h2>
+    <p class="screen-note">2026-08-17 确认，无遗留待决项，设计定稿。完整落点见 <span class="mono-txt">docs/VEHICLE_MODULE_DESIGN.md</span> 第 10 节。</p>
+    <div class="qlist">
+      <div class="q">
+        <div>
+          <p><b>附件上传 → 暂不做。</b></p>
+          <p>保单 PDF、事故照片、维修发票用文本字段记录存放位置（如共享盘路径）；将来要做时新增附件表 + 上传接口，不动现有字段。</p>
+        </div>
+      </div>
+      <div class="q">
+        <div>
+          <p><b>挂靠人驾照缺失 / 过期 → 警告放行。</b></p>
+          <p>不硬拦（避免「车实际已上保险但系统不让录」的死锁），同时进 Dashboard 和车辆提醒页持续标红。</p>
+        </div>
+      </div>
+      <div class="q">
+        <div>
+          <p><b>费用字段 → 不隐藏。</b></p>
+          <p>保费、修理费、赔付金额、月租金、购置金额对所有登录用户可见，不引入额外权限开关。</p>
+        </div>
+      </div>
+      <div class="q">
+        <div>
+          <p><b>车辆提醒接收人 → 与水电缴费提醒分开。</b></p>
+          <p>用户管理页新增「接收车辆提醒」勾选，与「接收缴费提醒」并列，互不影响。</p>
+        </div>
+      </div>
+      <div class="q">
+        <div>
+          <p><b>年检与注册 → 分开维护。</b></p>
+          <p>inspection 与 registration 两个到期字段、两类提醒，各自独立登记。</p>
+        </div>
+      </div>
+      <div class="q">
+        <div>
+          <p><b>保养间隔默认值 → 做主数据维护。</b></p>
+          <p>默认 5,000 mi / 6 个月放进字典页由 admin 维护，新车表单自动预填，每辆车仍可单独覆盖。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      车辆管理 V2 设计稿 · 2026-08-17 · 配套文档 <span class="mono-txt">docs/VEHICLE_MODULE_DESIGN.md</span> · 界面沿用系统现有 Tailwind 设计规范，示例数据均为虚构
+    </div>
+  </section>
+</div>
+
+<script>
+  document.querySelectorAll('.tabs').forEach(function (bar) {
+    var buttons = bar.querySelectorAll('button[data-tab]');
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        buttons.forEach(function (other) {
+          other.setAttribute('aria-selected', String(other === btn));
+          var panel = document.getElementById(other.dataset.tab);
+          if (panel) panel.classList.toggle('on', other === btn);
+        });
+      });
+    });
+  });
+</script>

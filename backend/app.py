@@ -16,6 +16,7 @@ from backend.services.management import (
     backfill_room_items,
     clear_expired_temp_leaves,
     run_utility_bill_reminders,
+    run_vehicle_reminders,
     seed_default_dictionaries,
 )
 
@@ -92,8 +93,11 @@ def _utility_bill_reminder_loop() -> None:
                 if cleared:
                     logger.info("cleared %s expired temp-leave marker(s)", cleared)
                 result = run_utility_bill_reminders(session)
+                vehicle_result = run_vehicle_reminders(session)
             if result.get("sent"):
                 logger.info("utility bill reminders sent: %s", result)
+            if vehicle_result.get("sent"):
+                logger.info("vehicle reminders sent: %s", vehicle_result)
         except Exception:  # noqa: BLE001 - keep the scheduler alive
             logger.exception("utility bill reminder run failed")
         time.sleep(UTILITY_REMINDER_INTERVAL_SECONDS)

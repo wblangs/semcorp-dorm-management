@@ -1,6 +1,6 @@
 # 外派员工宿舍、人员停留、入住分配、车辆基础档案管理系统（MVP）
 
-当前版本：`v0.7-mysql-deployment-prep`
+当前版本：`v0.8-vehicle-v2`
 
 基于 `A1` 目录下需求文档实现的内部试用版系统，覆盖当前 MVP 的核心能力：
 
@@ -13,11 +13,11 @@
 - 人员附属签证与停留合规信息维护
 - 入住分配（含业务规则校验）
 - Dashboard 基础统计
-- 车辆基础档案与状态维护
+- 车辆管理 V2：车辆档案（VIN/品牌车型/产权/租赁合同）、挂靠被保险人（每车 2 人 + 驾照到期）、保单与续保历史、保养台账（自动推算下次到期）、修理台账（在修自动联动车辆状态）、事故与理赔、宿舍调拨历史、钉钉到期提醒（保险/年检/注册/保养/租赁/驾照/理赔滞留）
 - SQLite 开发模式与 MySQL Community Edition 试用部署支持
 - admin-only 系统信息页
 
-当前 MVP 不包含司机管理、派车调度、接送需求、路线优化。车辆模块仅用于车辆档案维护、车辆状态维护、保险到期提醒、年检到期提醒、保养到期提醒。
+当前版本不包含司机管理、派车调度、接送需求、路线优化。车辆模块设计文档见 `docs/VEHICLE_MODULE_DESIGN.md`。
 
 ## 技术栈
 
@@ -126,7 +126,9 @@ cd frontend && npm run build
 - `GET /api/dictionaries`
 - `PUT /api/dictionaries/{key}`
 - `GET/POST /api/stay`
-- `GET/POST/PUT/DELETE /api/vehicles`
+- `GET/POST/PUT/DELETE /api/vehicles`（详情 `GET /api/vehicles/{id}`，提醒 `GET /api/vehicles/alerts`）
+- `POST /api/vehicles/{id}/drivers|policies|maintenances|repairs|accidents|assign`
+- `GET/POST /api/people/{id}/license`
 - `GET /api/dashboard`
 - `GET /api/alerts`（Phase 2：停留风险与合同到期提醒）
 

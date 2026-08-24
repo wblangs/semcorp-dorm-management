@@ -23,7 +23,7 @@ class Settings:
     dingtalk_corp_id: str = os.getenv("DINGTALK_CORP_ID", "")
     # DingTalk 应用 AgentId — required additionally for sending work notifications (工作通知).
     dingtalk_agent_id: str = os.getenv("DINGTALK_AGENT_ID", "")
-    app_version: str = "v0.7"
+    app_version: str = "v0.8"
 
     @cached_property
     def cors_origins(self) -> list[str]:

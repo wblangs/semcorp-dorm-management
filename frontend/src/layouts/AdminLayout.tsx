@@ -14,8 +14,8 @@ const navItems = [
   { to: "/allocations", label: "入住分配" },
   { to: "/summary", label: "汇总报表" },
   { to: "/check-in-records", label: "入住备份记录", adminOnly: true },
-  // HIDDEN: 车辆模块暂时隐藏（恢复时取消注释，并恢复 App.tsx 中的路由）
-  // { to: "/vehicles", label: "车辆" },
+  { to: "/vehicles", label: "车辆" },
+  { to: "/vehicle-alerts", label: "车辆提醒" },
   { to: "/utility-bills", label: "水电房费" },
   { to: "/dictionaries", label: "字典", adminOnly: true },
   { to: "/users", label: "用户管理", adminOnly: true },

@@ -17,17 +17,13 @@ const emptyOption = { label: "", value: "" };
 export function DictionariesPage() {
   const dictionaries = useDictionaries();
   const [error, setError] = useState("");
-  const [drafts, setDrafts] = useState<Record<DictionaryKey, DictionaryOption>>({
-    dormTypes: emptyOption,
-    roomTypes: emptyOption,
-    assetItems: emptyOption,
-    personTypes: emptyOption,
-    departments: emptyOption,
-    visaTypes: emptyOption,
-    vehicleTypes: emptyOption,
-    feeTypes: emptyOption,
-    statuses: emptyOption,
-  });
+  const [drafts, setDrafts] = useState<Record<DictionaryKey, DictionaryOption>>(
+    () =>
+      Object.fromEntries(dictionaryKeys.map((key) => [key, emptyOption])) as Record<
+        DictionaryKey,
+        DictionaryOption
+      >,
+  );
 
   const updateDictionary = async (key: DictionaryKey, options: DictionaryOption[]) => {
     setError("");

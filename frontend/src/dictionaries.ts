@@ -6,6 +6,12 @@ export type DictionaryKey =
   | "departments"
   | "visaTypes"
   | "vehicleTypes"
+  | "insuranceCoverageTypes"
+  | "maintenanceItems"
+  | "accidentTypes"
+  | "liabilityTypes"
+  | "vehicleVendors"
+  | "maintenanceIntervalDefaults"
   | "feeTypes"
   | "statuses";
 
@@ -25,6 +31,12 @@ export const dictionaryLabels: Record<DictionaryKey, string> = {
   departments: "部门",
   visaTypes: "签证类型",
   vehicleTypes: "车辆类型",
+  insuranceCoverageTypes: "险种",
+  maintenanceItems: "保养项目",
+  accidentTypes: "事故类型",
+  liabilityTypes: "责任判定",
+  vehicleVendors: "车辆供应商",
+  maintenanceIntervalDefaults: "保养间隔默认值",
   feeTypes: "缴费类型",
   statuses: "状态",
 };
@@ -77,6 +89,43 @@ export const defaultDictionaries: DictionaryState = {
     { label: "Van", value: "Van" },
     { label: "Pickup", value: "Pickup" },
     { label: "Other", value: "Other" },
+  ],
+  insuranceCoverageTypes: [
+    { label: "Liability", value: "Liability" },
+    { label: "Collision", value: "Collision" },
+    { label: "Comprehensive", value: "Comprehensive" },
+    { label: "Full Coverage", value: "Full Coverage" },
+  ],
+  maintenanceItems: [
+    { label: "换机油", value: "换机油" },
+    { label: "换机油滤", value: "换机油滤" },
+    { label: "换空气滤", value: "换空气滤" },
+    { label: "轮胎更换", value: "轮胎更换" },
+    { label: "四轮定位", value: "四轮定位" },
+    { label: "刹车片", value: "刹车片" },
+    { label: "电瓶", value: "电瓶" },
+    { label: "变速箱油", value: "变速箱油" },
+  ],
+  accidentTypes: [
+    { label: "单方事故", value: "单方事故" },
+    { label: "双方碰撞", value: "双方碰撞" },
+    { label: "停车剐蹭", value: "停车剐蹭" },
+    { label: "被追尾", value: "被追尾" },
+    { label: "车辆被撞（无人在车）", value: "车辆被撞（无人在车）" },
+    { label: "其他", value: "其他" },
+  ],
+  liabilityTypes: [
+    { label: "全责", value: "全责" },
+    { label: "主要责任", value: "主要责任" },
+    { label: "同等责任", value: "同等责任" },
+    { label: "次要责任", value: "次要责任" },
+    { label: "无责", value: "无责" },
+    { label: "待定", value: "待定" },
+  ],
+  vehicleVendors: [],
+  maintenanceIntervalDefaults: [
+    { label: "保养里程间隔 (miles)", value: "miles:5000" },
+    { label: "保养月数间隔 (months)", value: "months:6" },
   ],
   feeTypes: [
     { label: "房租", value: "房租" },

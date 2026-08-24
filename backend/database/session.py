@@ -111,6 +111,8 @@ def run_lightweight_migrations() -> None:
             }
             if "receive_bill_reminders" not in user_columns:
                 safe_add_column(conn, "ALTER TABLE users ADD COLUMN receive_bill_reminders BOOLEAN DEFAULT 0 NOT NULL")
+            if "receive_vehicle_reminders" not in user_columns:
+                safe_add_column(conn, "ALTER TABLE users ADD COLUMN receive_vehicle_reminders BOOLEAN DEFAULT 0 NOT NULL")
 
         stay_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='stays'")
@@ -135,8 +137,6 @@ def run_lightweight_migrations() -> None:
             }
             if "vehicle_type" not in vehicle_columns:
                 safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN vehicle_type VARCHAR(50)")
-            if "company" not in vehicle_columns:
-                safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN company VARCHAR(100)")
             if "base_dorm_id" not in vehicle_columns:
                 safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN base_dorm_id INTEGER")
             if "insurance_expire_date" not in vehicle_columns:
@@ -147,6 +147,32 @@ def run_lightweight_migrations() -> None:
                 safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN maintenance_due_date DATE")
             if "note" not in vehicle_columns:
                 safe_add_column(conn, "ALTER TABLE vehicles ADD COLUMN note VARCHAR(500)")
+            # ---- 车辆管理 V2 新增字段 ----
+            for ddl in (
+                "ALTER TABLE vehicles ADD COLUMN vin VARCHAR(32)",
+                "ALTER TABLE vehicles ADD COLUMN make VARCHAR(50)",
+                "ALTER TABLE vehicles ADD COLUMN model VARCHAR(50)",
+                "ALTER TABLE vehicles ADD COLUMN model_year INTEGER",
+                "ALTER TABLE vehicles ADD COLUMN color VARCHAR(30)",
+                "ALTER TABLE vehicles ADD COLUMN ownership_type VARCHAR(20) DEFAULT 'owned' NOT NULL",
+                "ALTER TABLE vehicles ADD COLUMN purchase_date DATE",
+                "ALTER TABLE vehicles ADD COLUMN purchase_price FLOAT",
+                "ALTER TABLE vehicles ADD COLUMN lease_company VARCHAR(100)",
+                "ALTER TABLE vehicles ADD COLUMN lease_start_date DATE",
+                "ALTER TABLE vehicles ADD COLUMN lease_end_date DATE",
+                "ALTER TABLE vehicles ADD COLUMN lease_monthly_fee FLOAT",
+                "ALTER TABLE vehicles ADD COLUMN registration_expire_date DATE",
+                "ALTER TABLE vehicles ADD COLUMN maintenance_due_mileage INTEGER",
+                "ALTER TABLE vehicles ADD COLUMN odometer INTEGER",
+                "ALTER TABLE vehicles ADD COLUMN odometer_updated_on DATE",
+                "ALTER TABLE vehicles ADD COLUMN maintenance_interval_miles INTEGER",
+                "ALTER TABLE vehicles ADD COLUMN maintenance_interval_months INTEGER",
+            ):
+                column_name = ddl.split("ADD COLUMN ")[1].split()[0]
+                if column_name not in vehicle_columns:
+                    safe_add_column(conn, ddl)
+            # 旧状态值迁移到固定值域。
+            conn.execute(text("UPDATE vehicles SET status = 'in_repair' WHERE status = 'maintenance'"))
 
         people_table_exists = conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='people'")

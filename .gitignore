@@ -62,3 +62,9 @@ build/
 *.zip
 
 *.rar
+
+# Claude Code local config
+.claude/
+
+# Local db backups
+*.bak-demo

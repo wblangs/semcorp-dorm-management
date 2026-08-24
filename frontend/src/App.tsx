@@ -15,8 +15,9 @@ import { RoomAssetsPage } from "./pages/RoomAssetsPage";
 import { StayPage } from "./pages/StayPage";
 import { SystemPage } from "./pages/SystemPage";
 import { UsersPage } from "./pages/UsersPage";
-// HIDDEN: 车辆模块暂时隐藏
-// import { VehiclesPage } from "./pages/VehiclesPage";
+import { VehiclesPage } from "./pages/VehiclesPage";
+import { VehicleDetailPage } from "./pages/VehicleDetailPage";
+import { VehicleAlertsPage } from "./pages/VehicleAlertsPage";
 import { CheckInRecordsPage } from "./pages/CheckInRecordsPage";
 import { SummaryPage } from "./pages/SummaryPage";
 import { UtilityBillsPage } from "./pages/UtilityBillsPage";
@@ -62,8 +63,9 @@ function AppRoutes() {
           }
         />
 
-        {/* HIDDEN: 车辆模块暂时隐藏 */}
-        {/* <Route path="/vehicles" element={<VehiclesPage />} /> */}
+        <Route path="/vehicles" element={<VehiclesPage />} />
+        <Route path="/vehicles/:vehicleId" element={<VehicleDetailPage />} />
+        <Route path="/vehicle-alerts" element={<VehicleAlertsPage />} />
         <Route path="/utility-bills" element={<UtilityBillsPage />} />
         <Route
           path="/dictionaries"

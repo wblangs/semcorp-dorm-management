@@ -16,7 +16,9 @@ from backend.models import (
     Dictionary,
     DictionaryItem,
     Dorm,
+    InsurancePolicy,
     Person,
+    PersonLicense,
     Room,
     RoomItem,
     Stay,
@@ -25,6 +27,12 @@ from backend.models import (
     UtilityBill,
     UtilityBillRecipient,
     Vehicle,
+    VehicleAccident,
+    VehicleAssignment,
+    VehicleDriver,
+    VehicleMaintenance,
+    VehicleReminderLog,
+    VehicleRepair,
 )
 from backend.schemas import (
     AllocationCreate,
@@ -33,7 +41,10 @@ from backend.schemas import (
     DictionaryReplace,
     DormCreate,
     DormUpdate,
+    InsurancePolicyCreate,
+    InsurancePolicyUpdate,
     PersonCreate,
+    PersonLicenseUpsert,
     PersonUpdate,
     RoomCreate,
     RoomUpdate,
@@ -44,7 +55,17 @@ from backend.schemas import (
     UtilityAccountUpdate,
     UtilityBillCreate,
     UtilityBillUpdate,
+    VehicleAccidentCreate,
+    VehicleAccidentUpdate,
+    VehicleAssign,
     VehicleCreate,
+    VehicleDriverCreate,
+    VehicleDriverUpdate,
+    VehicleMaintenanceCreate,
+    VehicleMaintenanceUpdate,
+    VehicleOdometerUpdate,
+    VehicleRepairCreate,
+    VehicleRepairUpdate,
     VehicleUpdate,
     UserCreate,
     UserPasswordReset,
@@ -100,6 +121,59 @@ DEFAULT_DICTIONARIES = {
     "vehicleTypes": {
         "label": "车辆类型",
         "items": [("SUV", "SUV"), ("Sedan", "Sedan"), ("Van", "Van"), ("Pickup", "Pickup"), ("Other", "Other")],
+    },
+    "insuranceCoverageTypes": {
+        "label": "险种",
+        "items": [
+            ("Liability", "Liability"),
+            ("Collision", "Collision"),
+            ("Comprehensive", "Comprehensive"),
+            ("Full Coverage", "Full Coverage"),
+        ],
+    },
+    "maintenanceItems": {
+        "label": "保养项目",
+        "items": [
+            ("换机油", "换机油"),
+            ("换机油滤", "换机油滤"),
+            ("换空气滤", "换空气滤"),
+            ("轮胎更换", "轮胎更换"),
+            ("四轮定位", "四轮定位"),
+            ("刹车片", "刹车片"),
+            ("电瓶", "电瓶"),
+            ("变速箱油", "变速箱油"),
+        ],
+    },
+    "accidentTypes": {
+        "label": "事故类型",
+        "items": [
+            ("单方事故", "单方事故"),
+            ("双方碰撞", "双方碰撞"),
+            ("停车剐蹭", "停车剐蹭"),
+            ("被追尾", "被追尾"),
+            ("车辆被撞（无人在车）", "车辆被撞（无人在车）"),
+            ("其他", "其他"),
+        ],
+    },
+    "liabilityTypes": {
+        "label": "责任判定",
+        "items": [
+            ("全责", "全责"),
+            ("主要责任", "主要责任"),
+            ("同等责任", "同等责任"),
+            ("次要责任", "次要责任"),
+            ("无责", "无责"),
+            ("待定", "待定"),
+        ],
+    },
+    "vehicleVendors": {
+        "label": "车辆供应商",
+        "items": [],
+    },
+    # 保养间隔主数据: value 格式 "miles:5000" / "months:6"，admin 在字典页维护数字部分。
+    "maintenanceIntervalDefaults": {
+        "label": "保养间隔默认值",
+        "items": [("保养里程间隔 (miles)", "miles:5000"), ("保养月数间隔 (months)", "months:6")],
     },
 }
 
@@ -182,6 +256,7 @@ def _serialize_user(user: User) -> dict:
         "last_login_at": user.last_login_at,
         "dingtalk_userid": user.dingtalk_userid,
         "receive_bill_reminders": user.receive_bill_reminders,
+        "receive_vehicle_reminders": user.receive_vehicle_reminders,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }
@@ -1046,16 +1121,318 @@ def list_available_rooms(dorm_id: int, person_id: int, db: Session):
     return result
 
 
+# ---------------- 车辆管理 V2 ----------------
+# 工作流状态是固定值域（不进字典）: 值参与状态联动/进度条/统计口径，
+# admin 改字典 value 会静默破坏逻辑，见 docs/VEHICLE_MODULE_DESIGN.md §3.11。
+
+MAX_INSURED_DRIVERS = 2
+VEHICLE_STATUSES = {"available", "in_repair", "disabled", "disposed"}
+REPAIR_STATUSES = {"reported", "in_repair", "done", "cancelled"}
+CLAIM_OPEN_STATUSES = {"filed", "surveying", "approved"}
+DEFAULT_MAINTENANCE_INTERVAL_MILES = 5000
+DEFAULT_MAINTENANCE_INTERVAL_MONTHS = 6
+VEHICLE_REMINDER_SEND_HOUR = 9
+# 提前提醒档位；0 表示已过期后的一次性提醒。每次只发最贴近的档位（min applicable）。
+VEHICLE_REMINDER_STAGES = {
+    "insurance_expire": [30, 15, 7, 0],
+    "inspection_expire": [30, 7, 0],
+    "registration_expire": [30, 7, 0],
+    "maintenance_due": [15, 0],
+    "lease_expire": [60, 30, 0],
+    "license_expire": [30, 7, 0],
+}
+VEHICLE_REMIND_KIND_LABELS = {
+    "insurance_expire": "保险到期",
+    "inspection_expire": "年检到期",
+    "registration_expire": "注册到期",
+    "maintenance_due": "保养到期",
+    "maintenance_mileage": "保养里程临近",
+    "lease_expire": "租赁合同到期",
+    "license_expire": "驾照到期",
+    "claim_stalled": "理赔超期未结案",
+}
+
+
+def _add_months(base: date, months: int) -> date:
+    month_index = base.month - 1 + months
+    year = base.year + month_index // 12
+    month = month_index % 12 + 1
+    # Clamp the day for shorter target months (e.g. Jan 31 + 1 month -> Feb 28).
+    day = min(base.day, [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                         31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+    return date(year, month, day)
+
+
+def _maintenance_interval_defaults(db: Session) -> tuple[int, int]:
+    """主数据默认保养间隔，字典 maintenanceIntervalDefaults，value 形如 miles:5000 / months:6。"""
+    miles, months = DEFAULT_MAINTENANCE_INTERVAL_MILES, DEFAULT_MAINTENANCE_INTERVAL_MONTHS
+    dictionary = db.scalar(
+        select(Dictionary).where(Dictionary.key == "maintenanceIntervalDefaults", Dictionary.is_deleted.is_(False))
+    )
+    if dictionary:
+        for item in db.scalars(
+            _active_stmt(DictionaryItem).where(DictionaryItem.dictionary_id == dictionary.id)
+        ).all():
+            kind, _, raw = (item.value or "").partition(":")
+            try:
+                number = int(raw.strip())
+            except ValueError:
+                continue
+            if kind.strip() == "miles" and number > 0:
+                miles = number
+            elif kind.strip() == "months" and number > 0:
+                months = number
+    return miles, months
+
+
+def _vehicle_intervals(vehicle: Vehicle, db: Session) -> tuple[int, int]:
+    default_miles, default_months = _maintenance_interval_defaults(db)
+    return (
+        vehicle.maintenance_interval_miles or default_miles,
+        vehicle.maintenance_interval_months or default_months,
+    )
+
+
+def _ensure_vehicle_identity_unique(
+    db: Session, plate_number: str, vin: Optional[str], exclude_id: Optional[int]
+) -> None:
+    """车牌/VIN 唯一性服务层校验：只比对未删除记录（软删除行不占坑）。"""
+    stmt = select(func.count(Vehicle.id)).where(
+        Vehicle.plate_number == plate_number, Vehicle.is_deleted.is_(False)
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(Vehicle.id != exclude_id)
+    if (db.scalar(stmt) or 0) > 0:
+        raise HTTPException(status_code=400, detail="车牌号已存在")
+    if vin:
+        stmt = select(func.count(Vehicle.id)).where(Vehicle.vin == vin, Vehicle.is_deleted.is_(False))
+        if exclude_id is not None:
+            stmt = stmt.where(Vehicle.id != exclude_id)
+        if (db.scalar(stmt) or 0) > 0:
+            raise HTTPException(status_code=400, detail="车架号 VIN 已存在")
+
+
+def refresh_vehicle_caches(db: Session, vehicle_id: int) -> None:
+    """派生缓存的唯一写入口：保单/保养/调拨的任何增改删之后都必须调用。
+
+    覆盖删除路径很关键——删掉当前生效保单后 insurance_expire_date 必须清空，
+    否则缓存悬空。不 commit，由调用方统一提交。
+    """
+    vehicle = db.get(Vehicle, vehicle_id)
+    if not vehicle:
+        return
+    active_policy = db.scalar(
+        _active_stmt(InsurancePolicy)
+        .where(InsurancePolicy.vehicle_id == vehicle_id, InsurancePolicy.status == "active")
+        .order_by(InsurancePolicy.end_date.desc(), InsurancePolicy.id.desc())
+    )
+    vehicle.insurance_expire_date = active_policy.end_date if active_policy else None
+    latest_maintenance = db.scalar(
+        _active_stmt(VehicleMaintenance)
+        .where(VehicleMaintenance.vehicle_id == vehicle_id)
+        .order_by(VehicleMaintenance.maintenance_date.desc(), VehicleMaintenance.id.desc())
+    )
+    vehicle.maintenance_due_date = latest_maintenance.next_due_date if latest_maintenance else None
+    vehicle.maintenance_due_mileage = latest_maintenance.next_due_mileage if latest_maintenance else None
+    active_assignment = db.scalar(
+        _active_stmt(VehicleAssignment)
+        .where(VehicleAssignment.vehicle_id == vehicle_id, VehicleAssignment.status == "active")
+        .order_by(VehicleAssignment.id.desc())
+    )
+    vehicle.base_dorm_id = active_assignment.dorm_id if active_assignment else None
+    db.flush()
+
+
+def _sync_vehicle_repair_status(db: Session, vehicle: Vehicle) -> None:
+    """在修联动。优先级 disposed > disabled > 自动联动：手工停用/处置后联动不碰状态。"""
+    if vehicle.status in ("disabled", "disposed"):
+        return
+    blocking = db.scalar(
+        select(func.count(VehicleRepair.id)).where(
+            VehicleRepair.vehicle_id == vehicle.id,
+            VehicleRepair.is_deleted.is_(False),
+            VehicleRepair.status == "in_repair",
+            VehicleRepair.affects_availability.is_(True),
+        )
+    ) or 0
+    vehicle.status = "in_repair" if blocking else "available"
+    db.flush()
+
+
+def _serialize_license(license_row: Optional[PersonLicense]) -> Optional[dict]:
+    if not license_row:
+        return None
+    return _model_data(license_row)
+
+
+def _driver_warnings(person: Optional[Person], license_row: Optional[PersonLicense], stay: Optional[Stay]) -> list[str]:
+    """驾照缺失/过期、人员已离场 → 警告放行（已确认决策），同时进提醒页。"""
+    warnings: list[str] = []
+    name = person.chinese_name if person else "该人员"
+    today = local_today()
+    if not license_row or not license_row.expire_date:
+        warnings.append(f"{name} 未维护驾照信息")
+    elif license_row.expire_date < today:
+        warnings.append(f"{name} 的驾照已于 {license_row.expire_date.isoformat()} 过期")
+    if stay and stay.actual_leave_date and stay.actual_leave_date <= today:
+        warnings.append(f"{name} 已于 {stay.actual_leave_date.isoformat()} 离场，需更换被保险人")
+    return warnings
+
+
+def _serialize_vehicle_driver(
+    driver: VehicleDriver,
+    person: Optional[Person],
+    license_row: Optional[PersonLicense],
+) -> dict:
+    data = _model_data(driver)
+    data["person"] = (
+        {
+            "id": person.id,
+            "chinese_name": person.chinese_name,
+            "english_name": person.english_name,
+            "department": person.department,
+            "person_type": person.person_type,
+        }
+        if person
+        else None
+    )
+    data["license"] = _serialize_license(license_row)
+    return data
+
+
+def _vehicle_driver_rows(db: Session, vehicle_ids: Optional[list[int]] = None, only_active: bool = True):
+    stmt = (
+        select(VehicleDriver, Person, PersonLicense)
+        .join(Person, VehicleDriver.person_id == Person.id, isouter=True)
+        .join(
+            PersonLicense,
+            (PersonLicense.person_id == VehicleDriver.person_id) & PersonLicense.is_deleted.is_(False),
+            isouter=True,
+        )
+        .where(VehicleDriver.is_deleted.is_(False))
+        .order_by(VehicleDriver.id.asc())
+    )
+    if only_active:
+        stmt = stmt.where(VehicleDriver.status == "active")
+    if vehicle_ids is not None:
+        stmt = stmt.where(VehicleDriver.vehicle_id.in_(vehicle_ids))
+    return db.execute(stmt).all()
+
+
 def list_vehicles(db: Session):
-    return db.scalars(_active_stmt(Vehicle).order_by(Vehicle.id.desc())).all()
+    vehicles = db.scalars(_active_stmt(Vehicle).order_by(Vehicle.id.desc())).all()
+    drivers_by_vehicle: dict[int, list[dict]] = {}
+    for driver, person, license_row in _vehicle_driver_rows(db):
+        drivers_by_vehicle.setdefault(driver.vehicle_id, []).append(
+            _serialize_vehicle_driver(driver, person, license_row)
+        )
+    result = []
+    for vehicle in vehicles:
+        data = _model_data(vehicle)
+        data["drivers"] = drivers_by_vehicle.get(vehicle.id, [])
+        result.append(data)
+    return result
+
+
+def get_vehicle_detail(vehicle_id: int, db: Session):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    stays = {
+        stay.person_id: stay
+        for stay in db.scalars(_active_stmt(Stay)).all()
+    }
+    active_drivers = []
+    warnings: list[str] = []
+    for driver, person, license_row in _vehicle_driver_rows(db, [vehicle_id]):
+        active_drivers.append(_serialize_vehicle_driver(driver, person, license_row))
+        warnings.extend(_driver_warnings(person, license_row, stays.get(driver.person_id)))
+    driver_history = [
+        _serialize_vehicle_driver(driver, person, license_row)
+        for driver, person, license_row in _vehicle_driver_rows(db, [vehicle_id], only_active=False)
+    ]
+    policies = [
+        _model_data(row)
+        for row in db.scalars(
+            _active_stmt(InsurancePolicy)
+            .where(InsurancePolicy.vehicle_id == vehicle_id)
+            .order_by(InsurancePolicy.end_date.desc(), InsurancePolicy.id.desc())
+        ).all()
+    ]
+    maintenances = [
+        _model_data(row)
+        for row in db.scalars(
+            _active_stmt(VehicleMaintenance)
+            .where(VehicleMaintenance.vehicle_id == vehicle_id)
+            .order_by(VehicleMaintenance.maintenance_date.desc(), VehicleMaintenance.id.desc())
+        ).all()
+    ]
+    repairs = [
+        _model_data(row)
+        for row in db.scalars(
+            _active_stmt(VehicleRepair)
+            .where(VehicleRepair.vehicle_id == vehicle_id)
+            .order_by(VehicleRepair.reported_date.desc(), VehicleRepair.id.desc())
+        ).all()
+    ]
+    accidents = [
+        _model_data(row)
+        for row in db.scalars(
+            _active_stmt(VehicleAccident)
+            .where(VehicleAccident.vehicle_id == vehicle_id)
+            .order_by(VehicleAccident.accident_datetime.desc(), VehicleAccident.id.desc())
+        ).all()
+    ]
+    assignments = [
+        _model_data(row)
+        for row in db.scalars(
+            _active_stmt(VehicleAssignment)
+            .where(VehicleAssignment.vehicle_id == vehicle_id)
+            .order_by(VehicleAssignment.start_date.desc(), VehicleAssignment.id.desc())
+        ).all()
+    ]
+    interval_miles, interval_months = _vehicle_intervals(vehicle, db)
+    data = _model_data(vehicle)
+    data["effective_interval_miles"] = interval_miles
+    data["effective_interval_months"] = interval_months
+    return {
+        "vehicle": data,
+        "drivers": active_drivers,
+        "driver_history": driver_history,
+        "driver_warnings": warnings,
+        "policies": policies,
+        "maintenances": maintenances,
+        "repairs": repairs,
+        "accidents": accidents,
+        "assignments": assignments,
+    }
 
 
 def create_vehicle(payload: VehicleCreate, db: Session, operator: str = "admin"):
-    if payload.base_dorm_id and not _get_active(db, Dorm, payload.base_dorm_id):
+    data = payload.model_dump()
+    data["plate_number"] = data["plate_number"].strip()
+    data["vin"] = (data.get("vin") or "").strip() or None
+    _ensure_vehicle_identity_unique(db, data["plate_number"], data["vin"], None)
+    base_dorm_id = data.pop("base_dorm_id", None)
+    if base_dorm_id and not _get_active(db, Dorm, base_dorm_id):
         raise HTTPException(status_code=400, detail="所属宿舍不存在")
-    vehicle = Vehicle(**payload.model_dump())
+    if data.get("odometer") is not None:
+        data["odometer_updated_on"] = local_today()
+    vehicle = Vehicle(**data)
     db.add(vehicle)
     db.flush()
+    if base_dorm_id:
+        db.add(
+            VehicleAssignment(
+                vehicle_id=vehicle.id,
+                dorm_id=base_dorm_id,
+                start_date=local_today(),
+                status="active",
+                note="建档初始宿舍",
+            )
+        )
+        db.flush()
+        refresh_vehicle_caches(db, vehicle.id)
     _audit(
         db,
         entity_type="vehicle",
@@ -1067,19 +1444,28 @@ def create_vehicle(payload: VehicleCreate, db: Session, operator: str = "admin")
     )
     db.commit()
     db.refresh(vehicle)
-    return vehicle
+    return _model_data(vehicle)
 
 
 def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session, operator: str = "admin"):
     vehicle = _get_active(db, Vehicle, vehicle_id)
     if not vehicle:
         raise HTTPException(status_code=404, detail="车辆不存在")
-    values = payload.model_dump(exclude_none=True)
-    if "base_dorm_id" in values and values["base_dorm_id"] and not _get_active(db, Dorm, values["base_dorm_id"]):
-        raise HTTPException(status_code=400, detail="所属宿舍不存在")
+    # exclude_unset: 允许显式送 null 清空可空字段（如租赁信息），未送字段不动。
+    values = payload.model_dump(exclude_unset=True)
+    next_plate = (values.get("plate_number") or vehicle.plate_number).strip()
+    next_vin = values["vin"].strip() if values.get("vin") else (None if "vin" in values else vehicle.vin)
+    _ensure_vehicle_identity_unique(db, next_plate, next_vin, vehicle.id)
+    if "plate_number" in values:
+        values["plate_number"] = next_plate
+    if "vin" in values:
+        values["vin"] = next_vin
     before = _model_data(vehicle)
     for key, value in values.items():
         setattr(vehicle, key, value)
+    # 手工把状态改回 available/in_repair 时，让在修联动立即重算，保持一致。
+    if values.get("status") in ("available", "in_repair"):
+        _sync_vehicle_repair_status(db, vehicle)
     db.flush()
     _audit(
         db,
@@ -1092,7 +1478,34 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session, operato
     )
     db.commit()
     db.refresh(vehicle)
-    return vehicle
+    return _model_data(vehicle)
+
+
+def update_vehicle_odometer(vehicle_id: int, payload: VehicleOdometerUpdate, db: Session, operator: str = "admin"):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    if vehicle.odometer is not None and payload.odometer < vehicle.odometer and not payload.force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"新里程 {payload.odometer} 小于当前里程 {vehicle.odometer}，可能是换表或录错；确认无误请再次提交",
+        )
+    before = _model_data(vehicle)
+    vehicle.odometer = payload.odometer
+    vehicle.odometer_updated_on = local_today()
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle",
+        entity_id=vehicle.id,
+        action="update_odometer",
+        before_data=before,
+        after_data=_model_data(vehicle),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(vehicle)
+    return _model_data(vehicle)
 
 
 def delete_vehicle(vehicle_id: int, db: Session, operator: str = "admin"):
@@ -1113,6 +1526,930 @@ def delete_vehicle(vehicle_id: int, db: Session, operator: str = "admin"):
     )
     db.commit()
     return {"deleted": True}
+
+
+# ---- 宿舍调拨 ----
+
+def list_vehicle_assignments(vehicle_id: int, db: Session):
+    if not _get_active(db, Vehicle, vehicle_id):
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    return db.scalars(
+        _active_stmt(VehicleAssignment)
+        .where(VehicleAssignment.vehicle_id == vehicle_id)
+        .order_by(VehicleAssignment.start_date.desc(), VehicleAssignment.id.desc())
+    ).all()
+
+
+def assign_vehicle(vehicle_id: int, payload: VehicleAssign, db: Session, operator: str = "admin"):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    dorm = _get_active(db, Dorm, payload.dorm_id)
+    if not dorm:
+        raise HTTPException(status_code=400, detail="宿舍不存在")
+    start_date = payload.start_date or local_today()
+    current = db.scalar(
+        _active_stmt(VehicleAssignment).where(
+            VehicleAssignment.vehicle_id == vehicle_id, VehicleAssignment.status == "active"
+        )
+    )
+    if current and current.dorm_id == payload.dorm_id:
+        raise HTTPException(status_code=400, detail="车辆已在该宿舍，无需调拨")
+    if current:
+        current.status = "ended"
+        current.end_date = start_date
+    assignment = VehicleAssignment(
+        vehicle_id=vehicle_id,
+        dorm_id=payload.dorm_id,
+        start_date=start_date,
+        status="active",
+        note=payload.note,
+    )
+    db.add(assignment)
+    db.flush()
+    refresh_vehicle_caches(db, vehicle_id)
+    _audit(
+        db,
+        entity_type="vehicle_assignment",
+        entity_id=assignment.id,
+        action="assign",
+        before_data=_model_data(current) if current else None,
+        after_data=_model_data(assignment),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+# ---- 挂靠人（被保险人） ----
+
+def list_vehicle_drivers(vehicle_id: int, db: Session):
+    if not _get_active(db, Vehicle, vehicle_id):
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    return [
+        _serialize_vehicle_driver(driver, person, license_row)
+        for driver, person, license_row in _vehicle_driver_rows(db, [vehicle_id], only_active=False)
+    ]
+
+
+def add_vehicle_driver(vehicle_id: int, payload: VehicleDriverCreate, db: Session, operator: str = "admin"):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    person = _get_active(db, Person, payload.person_id)
+    if not person:
+        raise HTTPException(status_code=400, detail="人员不存在")
+    active = db.scalars(
+        _active_stmt(VehicleDriver).where(
+            VehicleDriver.vehicle_id == vehicle_id, VehicleDriver.status == "active"
+        )
+    ).all()
+    if any(driver.person_id == payload.person_id for driver in active):
+        raise HTTPException(status_code=400, detail="该人员已挂靠在这辆车上")
+    if len(active) >= MAX_INSURED_DRIVERS:
+        raise HTTPException(status_code=400, detail=f"每辆车最多挂 {MAX_INSURED_DRIVERS} 个被保险人，请先解除现有挂靠")
+    if payload.role == "primary" and any(driver.role == "primary" for driver in active):
+        raise HTTPException(status_code=400, detail="已存在主要驾驶人，请先调整现有挂靠角色")
+    driver = VehicleDriver(
+        vehicle_id=vehicle_id,
+        person_id=payload.person_id,
+        role=payload.role,
+        start_date=payload.start_date or local_today(),
+        status="active",
+        note=payload.note,
+    )
+    db.add(driver)
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle_driver",
+        entity_id=driver.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(driver),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(driver)
+    license_row = _get_active(db, PersonLicense, payload.person_id)
+    stay = _get_active(db, Stay, payload.person_id)
+    return {
+        "driver": _serialize_vehicle_driver(driver, person, license_row),
+        "warnings": _driver_warnings(person, license_row, stay),
+    }
+
+
+def update_vehicle_driver(driver_id: int, payload: VehicleDriverUpdate, db: Session, operator: str = "admin"):
+    driver = _get_active(db, VehicleDriver, driver_id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="挂靠记录不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if values.get("role") == "primary" and driver.status == "active":
+        conflict = db.scalar(
+            select(func.count(VehicleDriver.id)).where(
+                VehicleDriver.vehicle_id == driver.vehicle_id,
+                VehicleDriver.status == "active",
+                VehicleDriver.role == "primary",
+                VehicleDriver.id != driver.id,
+                VehicleDriver.is_deleted.is_(False),
+            )
+        ) or 0
+        if conflict:
+            raise HTTPException(status_code=400, detail="已存在主要驾驶人，请先调整现有挂靠角色")
+    before = _model_data(driver)
+    for key, value in values.items():
+        setattr(driver, key, value)
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle_driver",
+        entity_id=driver.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(driver),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(driver)
+    return driver
+
+
+def remove_vehicle_driver(driver_id: int, db: Session, operator: str = "admin"):
+    """解除挂靠：置 removed 并写 end_date，保留历史，不物理删除。"""
+    driver = _get_active(db, VehicleDriver, driver_id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="挂靠记录不存在")
+    if driver.status != "active":
+        raise HTTPException(status_code=400, detail="该挂靠已解除")
+    before = _model_data(driver)
+    driver.status = "removed"
+    driver.end_date = local_today()
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle_driver",
+        entity_id=driver.id,
+        action="remove",
+        before_data=before,
+        after_data=_model_data(driver),
+        operator=operator,
+    )
+    db.commit()
+    return {"removed": True}
+
+
+# ---- 人员驾照 ----
+
+def get_person_license(person_id: int, db: Session):
+    person = _get_active(db, Person, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="人员不存在")
+    license_row = _get_active(db, PersonLicense, person_id)
+    return _serialize_license(license_row) or {"person_id": person_id}
+
+
+def list_person_licenses(db: Session):
+    return [_model_data(row) for row in db.scalars(_active_stmt(PersonLicense)).all()]
+
+
+def upsert_person_license(payload: PersonLicenseUpsert, db: Session, operator: str = "admin"):
+    person = _get_active(db, Person, payload.person_id)
+    if not person:
+        raise HTTPException(status_code=400, detail="人员不存在")
+    license_row = db.get(PersonLicense, payload.person_id)
+    if license_row:
+        before = _model_data(license_row)
+        for key, value in payload.model_dump().items():
+            setattr(license_row, key, value)
+        license_row.is_deleted = False
+        action = "update"
+    else:
+        license_row = PersonLicense(**payload.model_dump())
+        db.add(license_row)
+        before = None
+        action = "create"
+    db.flush()
+    _audit(
+        db,
+        entity_type="person_license",
+        entity_id=license_row.person_id,
+        action=action,
+        before_data=before,
+        after_data=_model_data(license_row),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(license_row)
+    return _model_data(license_row)
+
+
+# ---- 保单与续保 ----
+
+def list_vehicle_policies(vehicle_id: int, db: Session):
+    if not _get_active(db, Vehicle, vehicle_id):
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    return db.scalars(
+        _active_stmt(InsurancePolicy)
+        .where(InsurancePolicy.vehicle_id == vehicle_id)
+        .order_by(InsurancePolicy.end_date.desc(), InsurancePolicy.id.desc())
+    ).all()
+
+
+def create_vehicle_policy(vehicle_id: int, payload: InsurancePolicyCreate, db: Session, operator: str = "admin"):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=400, detail="到期日不能早于起保日")
+    warnings: list[str] = []
+    # 同车同时间仅 1 张 active：登记新保单自动过期旧保单（即续保动作本身）。
+    current_active = db.scalars(
+        _active_stmt(InsurancePolicy).where(
+            InsurancePolicy.vehicle_id == vehicle_id, InsurancePolicy.status == "active"
+        )
+    ).all()
+    for old in current_active:
+        if payload.start_date < old.end_date:
+            warnings.append(
+                f"新保单起保日 {payload.start_date.isoformat()} 早于原保单到期日 {old.end_date.isoformat()}，日期重叠（续保常见，放行）"
+            )
+        old.status = "expired"
+    # 承保驾驶人快照：登记那一刻的 active 挂靠人姓名，只作历史追溯。
+    driver_names = [
+        person.chinese_name
+        for _, person, _ in _vehicle_driver_rows(db, [vehicle_id])
+        if person
+    ]
+    policy = InsurancePolicy(
+        vehicle_id=vehicle_id,
+        driver_snapshot="、".join(driver_names) or None,
+        status="active",
+        **payload.model_dump(),
+    )
+    db.add(policy)
+    db.flush()
+    refresh_vehicle_caches(db, vehicle_id)
+    _audit(
+        db,
+        entity_type="insurance_policy",
+        entity_id=policy.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(policy),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(policy)
+    return {"policy": _model_data(policy), "warnings": warnings}
+
+
+def update_vehicle_policy(policy_id: int, payload: InsurancePolicyUpdate, db: Session, operator: str = "admin"):
+    policy = _get_active(db, InsurancePolicy, policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail="保单不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if values.get("status") == "active":
+        # 把历史保单改回 active 前，先确认没有别的 active 保单。
+        conflict = db.scalar(
+            select(func.count(InsurancePolicy.id)).where(
+                InsurancePolicy.vehicle_id == policy.vehicle_id,
+                InsurancePolicy.status == "active",
+                InsurancePolicy.id != policy.id,
+                InsurancePolicy.is_deleted.is_(False),
+            )
+        ) or 0
+        if conflict:
+            raise HTTPException(status_code=400, detail="该车已有生效中的保单，同一时间只允许一张 active 保单")
+    before = _model_data(policy)
+    for key, value in values.items():
+        setattr(policy, key, value)
+    next_start = policy.start_date
+    next_end = policy.end_date
+    if next_end and next_start and next_end < next_start:
+        raise HTTPException(status_code=400, detail="到期日不能早于起保日")
+    db.flush()
+    refresh_vehicle_caches(db, policy.vehicle_id)
+    _audit(
+        db,
+        entity_type="insurance_policy",
+        entity_id=policy.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(policy),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(policy)
+    return policy
+
+
+def delete_vehicle_policy(policy_id: int, db: Session, operator: str = "admin"):
+    policy = _get_active(db, InsurancePolicy, policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail="保单不存在")
+    before = _model_data(policy)
+    policy.is_deleted = True
+    db.flush()
+    refresh_vehicle_caches(db, policy.vehicle_id)
+    _audit(
+        db,
+        entity_type="insurance_policy",
+        entity_id=policy.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(policy),
+        operator=operator,
+    )
+    db.commit()
+    return {"deleted": True}
+
+
+# ---- 保养台账 ----
+
+def list_vehicle_maintenances(vehicle_id: int, db: Session):
+    if not _get_active(db, Vehicle, vehicle_id):
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    return db.scalars(
+        _active_stmt(VehicleMaintenance)
+        .where(VehicleMaintenance.vehicle_id == vehicle_id)
+        .order_by(VehicleMaintenance.maintenance_date.desc(), VehicleMaintenance.id.desc())
+    ).all()
+
+
+def create_vehicle_maintenance(vehicle_id: int, payload: VehicleMaintenanceCreate, db: Session, operator: str = "admin"):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    data = payload.model_dump()
+    interval_miles, interval_months = _vehicle_intervals(vehicle, db)
+    if data.get("next_due_date") is None:
+        data["next_due_date"] = _add_months(data["maintenance_date"], interval_months)
+    if data.get("next_due_mileage") is None and data.get("odometer") is not None:
+        data["next_due_mileage"] = data["odometer"] + interval_miles
+    maintenance = VehicleMaintenance(vehicle_id=vehicle_id, **data)
+    db.add(maintenance)
+    # 回写车辆里程：只在新里程更大时更新（换表/录错走里程接口的 force 流程）。
+    if data.get("odometer") is not None and (vehicle.odometer is None or data["odometer"] > vehicle.odometer):
+        vehicle.odometer = data["odometer"]
+        vehicle.odometer_updated_on = data["maintenance_date"]
+    db.flush()
+    refresh_vehicle_caches(db, vehicle_id)
+    _audit(
+        db,
+        entity_type="vehicle_maintenance",
+        entity_id=maintenance.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(maintenance),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(maintenance)
+    return maintenance
+
+
+def update_vehicle_maintenance(maintenance_id: int, payload: VehicleMaintenanceUpdate, db: Session, operator: str = "admin"):
+    maintenance = _get_active(db, VehicleMaintenance, maintenance_id)
+    if not maintenance:
+        raise HTTPException(status_code=404, detail="保养记录不存在")
+    values = payload.model_dump(exclude_unset=True)
+    before = _model_data(maintenance)
+    for key, value in values.items():
+        setattr(maintenance, key, value)
+    db.flush()
+    refresh_vehicle_caches(db, maintenance.vehicle_id)
+    _audit(
+        db,
+        entity_type="vehicle_maintenance",
+        entity_id=maintenance.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(maintenance),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(maintenance)
+    return maintenance
+
+
+def delete_vehicle_maintenance(maintenance_id: int, db: Session, operator: str = "admin"):
+    maintenance = _get_active(db, VehicleMaintenance, maintenance_id)
+    if not maintenance:
+        raise HTTPException(status_code=404, detail="保养记录不存在")
+    before = _model_data(maintenance)
+    maintenance.is_deleted = True
+    db.flush()
+    refresh_vehicle_caches(db, maintenance.vehicle_id)
+    _audit(
+        db,
+        entity_type="vehicle_maintenance",
+        entity_id=maintenance.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(maintenance),
+        operator=operator,
+    )
+    db.commit()
+    return {"deleted": True}
+
+
+# ---- 修理台账 ----
+
+def list_vehicle_repairs(vehicle_id: int, db: Session):
+    if not _get_active(db, Vehicle, vehicle_id):
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    return db.scalars(
+        _active_stmt(VehicleRepair)
+        .where(VehicleRepair.vehicle_id == vehicle_id)
+        .order_by(VehicleRepair.reported_date.desc(), VehicleRepair.id.desc())
+    ).all()
+
+
+def _validate_repair_accident(db: Session, vehicle_id: int, accident_id: Optional[int]) -> None:
+    if accident_id is None:
+        return
+    accident = _get_active(db, VehicleAccident, accident_id)
+    if not accident or accident.vehicle_id != vehicle_id:
+        raise HTTPException(status_code=400, detail="关联事故不存在或不属于该车辆")
+
+
+def create_vehicle_repair(vehicle_id: int, payload: VehicleRepairCreate, db: Session, operator: str = "admin"):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    _validate_repair_accident(db, vehicle_id, payload.accident_id)
+    repair = VehicleRepair(vehicle_id=vehicle_id, **payload.model_dump())
+    db.add(repair)
+    db.flush()
+    _sync_vehicle_repair_status(db, vehicle)
+    _audit(
+        db,
+        entity_type="vehicle_repair",
+        entity_id=repair.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(repair),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(repair)
+    return repair
+
+
+def update_vehicle_repair(repair_id: int, payload: VehicleRepairUpdate, db: Session, operator: str = "admin"):
+    repair = _get_active(db, VehicleRepair, repair_id)
+    if not repair:
+        raise HTTPException(status_code=404, detail="修理记录不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if "accident_id" in values:
+        _validate_repair_accident(db, repair.vehicle_id, values["accident_id"])
+    before = _model_data(repair)
+    for key, value in values.items():
+        setattr(repair, key, value)
+    db.flush()
+    vehicle = _get_active(db, Vehicle, repair.vehicle_id)
+    if vehicle:
+        _sync_vehicle_repair_status(db, vehicle)
+    _audit(
+        db,
+        entity_type="vehicle_repair",
+        entity_id=repair.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(repair),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(repair)
+    return repair
+
+
+def delete_vehicle_repair(repair_id: int, db: Session, operator: str = "admin"):
+    repair = _get_active(db, VehicleRepair, repair_id)
+    if not repair:
+        raise HTTPException(status_code=404, detail="修理记录不存在")
+    before = _model_data(repair)
+    repair.is_deleted = True
+    db.flush()
+    vehicle = _get_active(db, Vehicle, repair.vehicle_id)
+    if vehicle:
+        _sync_vehicle_repair_status(db, vehicle)
+    _audit(
+        db,
+        entity_type="vehicle_repair",
+        entity_id=repair.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(repair),
+        operator=operator,
+    )
+    db.commit()
+    return {"deleted": True}
+
+
+# ---- 事故与理赔 ----
+
+def list_vehicle_accidents(vehicle_id: int, db: Session):
+    if not _get_active(db, Vehicle, vehicle_id):
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    return db.scalars(
+        _active_stmt(VehicleAccident)
+        .where(VehicleAccident.vehicle_id == vehicle_id)
+        .order_by(VehicleAccident.accident_datetime.desc(), VehicleAccident.id.desc())
+    ).all()
+
+
+def _default_accident_policy(db: Session, vehicle_id: int, accident_date: date) -> Optional[int]:
+    policy = db.scalar(
+        _active_stmt(InsurancePolicy)
+        .where(
+            InsurancePolicy.vehicle_id == vehicle_id,
+            InsurancePolicy.start_date <= accident_date,
+            InsurancePolicy.end_date >= accident_date,
+        )
+        .order_by(InsurancePolicy.id.desc())
+    )
+    return policy.id if policy else None
+
+
+def _accident_warnings(data: dict) -> list[str]:
+    warnings = []
+    settled = data.get("settled_amount")
+    estimated = data.get("estimated_loss")
+    if settled is not None and estimated is not None and settled > estimated:
+        warnings.append(f"实际赔付 {settled:g} 大于定损金额 {estimated:g}，请复核")
+    return warnings
+
+
+def create_vehicle_accident(vehicle_id: int, payload: VehicleAccidentCreate, db: Session, operator: str = "admin"):
+    vehicle = _get_active(db, Vehicle, vehicle_id)
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="车辆不存在")
+    data = payload.model_dump()
+    if data.get("driver_person_id") and not _get_active(db, Person, data["driver_person_id"]):
+        raise HTTPException(status_code=400, detail="当事驾驶人不存在")
+    if data.get("policy_id") is None:
+        # 默认取事故日期覆盖的保单。
+        data["policy_id"] = _default_accident_policy(db, vehicle_id, data["accident_datetime"].date())
+    elif not _get_active(db, InsurancePolicy, data["policy_id"]):
+        raise HTTPException(status_code=400, detail="出险保单不存在")
+    warnings = _accident_warnings(data)
+    accident = VehicleAccident(vehicle_id=vehicle_id, **data)
+    db.add(accident)
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle_accident",
+        entity_id=accident.id,
+        action="create",
+        before_data=None,
+        after_data=_model_data(accident),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(accident)
+    return {"accident": _model_data(accident), "warnings": warnings}
+
+
+def update_vehicle_accident(accident_id: int, payload: VehicleAccidentUpdate, db: Session, operator: str = "admin"):
+    accident = _get_active(db, VehicleAccident, accident_id)
+    if not accident:
+        raise HTTPException(status_code=404, detail="事故记录不存在")
+    values = payload.model_dump(exclude_unset=True)
+    if values.get("driver_person_id") and not _get_active(db, Person, values["driver_person_id"]):
+        raise HTTPException(status_code=400, detail="当事驾驶人不存在")
+    if values.get("policy_id") and not _get_active(db, InsurancePolicy, values["policy_id"]):
+        raise HTTPException(status_code=400, detail="出险保单不存在")
+    before = _model_data(accident)
+    for key, value in values.items():
+        setattr(accident, key, value)
+    if accident.claim_status == "closed" and accident.claim_closed_date is None:
+        accident.claim_closed_date = local_today()
+    db.flush()
+    warnings = _accident_warnings(_model_data(accident))
+    _audit(
+        db,
+        entity_type="vehicle_accident",
+        entity_id=accident.id,
+        action="update",
+        before_data=before,
+        after_data=_model_data(accident),
+        operator=operator,
+    )
+    db.commit()
+    db.refresh(accident)
+    return {"accident": _model_data(accident), "warnings": warnings}
+
+
+def delete_vehicle_accident(accident_id: int, db: Session, operator: str = "admin"):
+    accident = _get_active(db, VehicleAccident, accident_id)
+    if not accident:
+        raise HTTPException(status_code=404, detail="事故记录不存在")
+    before = _model_data(accident)
+    accident.is_deleted = True
+    # 解除修理单上的事故关联，避免指向已删除记录。
+    for repair in db.scalars(
+        _active_stmt(VehicleRepair).where(VehicleRepair.accident_id == accident_id)
+    ).all():
+        repair.accident_id = None
+    db.flush()
+    _audit(
+        db,
+        entity_type="vehicle_accident",
+        entity_id=accident.id,
+        action="delete",
+        before_data=before,
+        after_data=_model_data(accident),
+        operator=operator,
+    )
+    db.commit()
+    return {"deleted": True}
+
+
+# ---- 车辆提醒（页面聚合 + 钉钉推送共用口径） ----
+
+def _vehicle_alert_items(db: Session):
+    """所有车辆类到期/缺失项的统一口径，供 /vehicles/alerts 页面与钉钉提醒共用。"""
+    today = local_today()
+    vehicles = db.scalars(
+        _active_stmt(Vehicle).where(Vehicle.status != "disposed").order_by(Vehicle.id.asc())
+    ).all()
+    dorm_names = {dorm.id: dorm.name for dorm in db.scalars(_active_stmt(Dorm)).all()}
+    drivers_by_vehicle: dict[int, list] = {}
+    for driver, person, license_row in _vehicle_driver_rows(db):
+        drivers_by_vehicle.setdefault(driver.vehicle_id, []).append((driver, person, license_row))
+
+    date_items = []
+    missing_items = []
+
+    def base(vehicle, kind, due, extra=None, entity_type="vehicle", entity_id=None, remind_kind=None):
+        return {
+            "vehicle_id": vehicle.id,
+            "plate_number": vehicle.plate_number,
+            "vehicle_label": " ".join(filter(None, [vehicle.make, vehicle.model])) or None,
+            "dorm_id": vehicle.base_dorm_id,
+            "dorm_name": dorm_names.get(vehicle.base_dorm_id) if vehicle.base_dorm_id else None,
+            "kind": kind,
+            "kind_label": VEHICLE_REMIND_KIND_LABELS.get(kind, kind),
+            "due_date": due,
+            "days_left": (due - today).days if due else None,
+            "extra": extra,
+            "_entity_type": entity_type,
+            "_entity_id": entity_id if entity_id is not None else vehicle.id,
+            "_remind_kind": remind_kind or kind,
+        }
+
+    for vehicle in vehicles:
+        drivers = drivers_by_vehicle.get(vehicle.id, [])
+        if vehicle.insurance_expire_date:
+            date_items.append(base(vehicle, "insurance_expire", vehicle.insurance_expire_date))
+        else:
+            missing_items.append(base(vehicle, "insurance_expire", None, extra="未上保险"))
+        if not drivers:
+            missing_items.append(base(vehicle, "license_expire", None, extra="未挂靠被保险人"))
+        if not vehicle.base_dorm_id:
+            missing_items.append(base(vehicle, "lease_expire", None, extra="未分配宿舍"))
+        if vehicle.inspection_expire_date:
+            date_items.append(base(vehicle, "inspection_expire", vehicle.inspection_expire_date))
+        if vehicle.registration_expire_date:
+            date_items.append(base(vehicle, "registration_expire", vehicle.registration_expire_date))
+        if vehicle.ownership_type == "leased" and vehicle.lease_end_date:
+            extra = f"{vehicle.lease_company or ''}"
+            if vehicle.lease_monthly_fee is not None:
+                extra = f"{extra} ${vehicle.lease_monthly_fee:g}/月".strip()
+            date_items.append(base(vehicle, "lease_expire", vehicle.lease_end_date, extra=extra.strip() or None))
+        if vehicle.maintenance_due_date:
+            extra = None
+            if vehicle.odometer is not None and vehicle.maintenance_due_mileage is not None:
+                extra = f"{vehicle.odometer:,} / {vehicle.maintenance_due_mileage:,} mi"
+            date_items.append(base(vehicle, "maintenance_due", vehicle.maintenance_due_date, extra=extra))
+            # 里程口径：达到间隔 90% 时进提醒（一次性，锚定本保养周期）。
+            interval_miles, _ = _vehicle_intervals(vehicle, db)
+            if (
+                vehicle.odometer is not None
+                and vehicle.maintenance_due_mileage is not None
+                and vehicle.odometer >= vehicle.maintenance_due_mileage - interval_miles * 0.1
+            ):
+                date_items.append(
+                    base(
+                        vehicle,
+                        "maintenance_mileage",
+                        vehicle.maintenance_due_date,
+                        extra=f"当前 {vehicle.odometer:,} mi，目标 {vehicle.maintenance_due_mileage:,} mi",
+                        remind_kind="maintenance_mileage",
+                    )
+                )
+        for driver, person, license_row in drivers:
+            if license_row and license_row.expire_date:
+                item = base(
+                    vehicle,
+                    "license_expire",
+                    license_row.expire_date,
+                    extra=f"{person.chinese_name if person else '?'} · {'主要' if driver.role == 'primary' else '第二'}驾驶人",
+                    entity_type="person_license",
+                    entity_id=driver.person_id,
+                )
+                date_items.append(item)
+
+    # 理赔滞留：已报案未结案超过 30 天，每 30 天提醒一次。
+    stalled_items = []
+    accidents = db.scalars(
+        _active_stmt(VehicleAccident).where(
+            VehicleAccident.claim_status.in_(CLAIM_OPEN_STATUSES),
+            VehicleAccident.claim_filed_date.is_not(None),
+        )
+    ).all()
+    vehicle_map = {vehicle.id: vehicle for vehicle in vehicles}
+    for accident in accidents:
+        vehicle = vehicle_map.get(accident.vehicle_id)
+        if not vehicle:
+            continue
+        days_open = (today - accident.claim_filed_date).days
+        if days_open >= 30:
+            item = base(
+                vehicle,
+                "claim_stalled",
+                accident.claim_filed_date,
+                extra=f"案号 {accident.claim_no or '-'} 已报案 {days_open} 天未结案",
+                entity_type="vehicle_accident",
+                entity_id=accident.id,
+            )
+            item["days_open"] = days_open
+            stalled_items.append(item)
+
+    return date_items, missing_items, stalled_items
+
+
+def vehicle_alerts(db: Session):
+    date_items, missing_items, stalled_items = _vehicle_alert_items(db)
+
+    def clean(item):
+        return {key: value for key, value in item.items() if not key.startswith("_")}
+
+    overdue = [clean(i) for i in date_items if i["days_left"] is not None and i["days_left"] < 0 and i["kind"] != "claim_stalled"]
+    within7 = [clean(i) for i in date_items if i["days_left"] is not None and 0 <= i["days_left"] <= 7]
+    horizon = lambda i: 60 if i["kind"] == "lease_expire" else 30  # noqa: E731
+    within30 = [
+        clean(i)
+        for i in date_items
+        if i["days_left"] is not None and 7 < i["days_left"] <= horizon(i)
+    ]
+    for group in (overdue, within7, within30):
+        group.sort(key=lambda item: (item["days_left"], item["plate_number"]))
+    return {
+        "missing": [clean(i) for i in missing_items],
+        "overdue": overdue,
+        "within7": within7,
+        "within30": within30,
+        "claimStalled": [clean(i) for i in stalled_items],
+    }
+
+
+def vehicle_summary(db: Session):
+    dorm_names = {dorm.id: dorm.name for dorm in db.scalars(_active_stmt(Dorm)).all()}
+    vehicles = db.scalars(_active_stmt(Vehicle)).all()
+    by_dorm: dict = {}
+    for vehicle in vehicles:
+        key = vehicle.base_dorm_id
+        entry = by_dorm.setdefault(key, {"dorm_id": key, "dorm_name": dorm_names.get(key, "未分配"), "vehicles": 0})
+        entry["vehicles"] += 1
+    year = local_today().year
+    year_start = date(year, 1, 1)
+    maintenance_total = db.scalar(
+        select(func.coalesce(func.sum(VehicleMaintenance.cost), 0)).where(
+            VehicleMaintenance.is_deleted.is_(False),
+            VehicleMaintenance.maintenance_date >= year_start,
+        )
+    ) or 0
+    repair_total = db.scalar(
+        select(func.coalesce(func.sum(VehicleRepair.cost), 0)).where(
+            VehicleRepair.is_deleted.is_(False),
+            VehicleRepair.reported_date >= year_start,
+        )
+    ) or 0
+    return {
+        "byDorm": sorted(by_dorm.values(), key=lambda item: (item["dorm_id"] is None, item["dorm_id"] or 0)),
+        "year": year,
+        "maintenanceCostYtd": maintenance_total,
+        "repairCostYtd": repair_total,
+    }
+
+
+def _vehicle_recipient_dingtalk_ids(db: Session) -> list[str]:
+    return [
+        user.dingtalk_userid
+        for user in db.scalars(
+            _active_stmt(User).where(
+                User.receive_vehicle_reminders.is_(True),
+                User.dingtalk_userid.is_not(None),
+            )
+        ).all()
+        if user.dingtalk_userid
+    ]
+
+
+def _reminder_logged(db: Session, item: dict, stage: int, due_target: date) -> bool:
+    return bool(
+        db.scalar(
+            select(func.count(VehicleReminderLog.id)).where(
+                VehicleReminderLog.entity_type == item["_entity_type"],
+                VehicleReminderLog.entity_id == item["_entity_id"],
+                VehicleReminderLog.remind_kind == item["_remind_kind"],
+                VehicleReminderLog.remind_stage == stage,
+                VehicleReminderLog.due_target_date == due_target,
+            )
+        )
+    )
+
+
+def run_vehicle_reminders(db: Session, respect_send_hour: bool = True) -> dict:
+    """车辆类钉钉到期提醒。幂等键 (entity, kind, stage, due_target_date)：
+    到期日一变自动重新武装；每次只发最贴近的档位。"""
+    from backend.services import dingtalk
+
+    if respect_send_hour and local_now().hour < VEHICLE_REMINDER_SEND_HOUR:
+        return {"sent": 0, "reason": f"未到发送时间（每天 {VEHICLE_REMINDER_SEND_HOUR} 点后发送）"}
+
+    today = local_today()
+    date_items, _missing, stalled_items = _vehicle_alert_items(db)
+
+    pending: list[tuple[dict, int, date, str]] = []
+    for item in date_items:
+        due = item["due_date"]
+        days_left = item["days_left"]
+        if due is None or days_left is None:
+            continue
+        kind = item["_remind_kind"]
+        if kind == "maintenance_mileage":
+            # 里程触发：一次性，锚定本周期的下次保养日期，档位固定 90。
+            if not _reminder_logged(db, item, 90, due):
+                line = f"· {item['plate_number']}（{item['dorm_name'] or '未分配'}）保养里程临近：{item['extra']}"
+                pending.append((item, 90, due, line))
+            continue
+        stages = VEHICLE_REMINDER_STAGES.get(kind)
+        if not stages:
+            continue
+        applicable = [stage for stage in stages if days_left <= stage]
+        if not applicable:
+            continue
+        stage = min(applicable)
+        if _reminder_logged(db, item, stage, due):
+            continue
+        when = f"已过期 {-days_left} 天" if days_left < 0 else ("今天到期" if days_left == 0 else f"{days_left} 天后到期")
+        line = f"· {item['plate_number']}（{item['dorm_name'] or '未分配'}）{item['kind_label']}：{due.isoformat()}（{when}）"
+        if item.get("extra"):
+            line += f"，{item['extra']}"
+        pending.append((item, stage, due, line))
+
+    for item in stalled_items:
+        # 每 30 天一期：第 k 期的 due_target = 报案日 + 30k 天。
+        k = item["days_open"] // 30
+        due_target = item["due_date"] + timedelta(days=30 * k)
+        if _reminder_logged(db, item, k, due_target):
+            continue
+        line = f"· {item['plate_number']}（{item['dorm_name'] or '未分配'}）{item['kind_label']}：{item['extra']}"
+        pending.append((item, k, due_target, line))
+
+    if not pending:
+        return {"sent": 0, "reason": "没有需要提醒的车辆事项"}
+    if not dingtalk.can_send_messages():
+        return {"sent": 0, "reason": "钉钉消息未配置（缺少 DINGTALK_AGENT_ID 等环境变量）"}
+    userids = _vehicle_recipient_dingtalk_ids(db)
+    if not userids:
+        return {"sent": 0, "reason": "没有绑定钉钉的车辆提醒接收人"}
+
+    lines = ["【车辆到期提醒】以下事项需要处理："]
+    lines.extend(line for _, _, _, line in pending)
+    lines.append("请及时处理。")
+    dingtalk.send_work_message(userids, "\n".join(lines))
+    for item, stage, due_target, _line in pending:
+        db.add(
+            VehicleReminderLog(
+                entity_type=item["_entity_type"],
+                entity_id=item["_entity_id"],
+                remind_kind=item["_remind_kind"],
+                remind_stage=stage,
+                due_target_date=due_target,
+                reminded_on=today,
+            )
+        )
+    db.commit()
+    return {"sent": len(pending), "recipients": len(userids)}
+
+
+def send_vehicle_test_message(db: Session) -> dict:
+    from backend.services import dingtalk
+
+    userids = _vehicle_recipient_dingtalk_ids(db)
+    if not userids:
+        raise HTTPException(
+            status_code=400,
+            detail="没有绑定钉钉的车辆提醒接收人：请在用户管理中为用户开启「接收车辆提醒」，且用户需要用钉钉登录过本系统一次以完成绑定",
+        )
+    return dingtalk.send_work_message(
+        userids, f"【车辆到期提醒】这是一条测试消息（{local_today().isoformat()}），钉钉提醒配置成功。"
+    )
 
 
 # ---------------- 水电网气房费 (utility bills) ----------------
@@ -1549,11 +2886,13 @@ def dashboard(db: Session):
     available_vehicles = db.scalar(
         select(func.count(Vehicle.id)).where(Vehicle.status == "available", Vehicle.is_deleted.is_(False))
     ) or 0
-    maintenance_vehicles = db.scalar(
-        select(func.count(Vehicle.id)).where(Vehicle.status == "maintenance", Vehicle.is_deleted.is_(False))
+    in_repair_vehicles = db.scalar(
+        select(func.count(Vehicle.id)).where(Vehicle.status == "in_repair", Vehicle.is_deleted.is_(False))
     ) or 0
     disabled_vehicles = db.scalar(
-        select(func.count(Vehicle.id)).where(Vehicle.status == "disabled", Vehicle.is_deleted.is_(False))
+        select(func.count(Vehicle.id)).where(
+            Vehicle.status.in_(("disabled", "disposed")), Vehicle.is_deleted.is_(False)
+        )
     ) or 0
 
     today = local_today()
@@ -1599,25 +2938,85 @@ def dashboard(db: Session):
     ]
 
     renewal_needed_dorms.sort(key=lambda item: item["days_left"])
+    active_vehicle_filter = (Vehicle.is_deleted.is_(False), Vehicle.status != "disposed")
     vehicle_insurance_expiring_30 = db.scalar(
         select(func.count(Vehicle.id)).where(
-            Vehicle.is_deleted.is_(False),
+            *active_vehicle_filter,
             Vehicle.insurance_expire_date.is_not(None),
             Vehicle.insurance_expire_date <= lease_30_deadline,
         )
     ) or 0
     vehicle_inspection_expiring_30 = db.scalar(
         select(func.count(Vehicle.id)).where(
-            Vehicle.is_deleted.is_(False),
+            *active_vehicle_filter,
             Vehicle.inspection_expire_date.is_not(None),
             Vehicle.inspection_expire_date <= lease_30_deadline,
         )
     ) or 0
+    vehicle_registration_expiring_30 = db.scalar(
+        select(func.count(Vehicle.id)).where(
+            *active_vehicle_filter,
+            Vehicle.registration_expire_date.is_not(None),
+            Vehicle.registration_expire_date <= lease_30_deadline,
+        )
+    ) or 0
     vehicle_maintenance_due_30 = db.scalar(
         select(func.count(Vehicle.id)).where(
-            Vehicle.is_deleted.is_(False),
+            *active_vehicle_filter,
             Vehicle.maintenance_due_date.is_not(None),
             Vehicle.maintenance_due_date <= lease_30_deadline,
+        )
+    ) or 0
+    vehicle_lease_expiring_60 = db.scalar(
+        select(func.count(Vehicle.id)).where(
+            *active_vehicle_filter,
+            Vehicle.ownership_type == "leased",
+            Vehicle.lease_end_date.is_not(None),
+            Vehicle.lease_end_date <= lease_60_deadline,
+        )
+    ) or 0
+    uninsured_vehicles = db.scalar(
+        select(func.count(Vehicle.id)).where(
+            *active_vehicle_filter,
+            Vehicle.insurance_expire_date.is_(None),
+        )
+    ) or 0
+    active_driver_person_ids = {
+        row[0]
+        for row in db.execute(
+            select(VehicleDriver.person_id)
+            .join(Vehicle, VehicleDriver.vehicle_id == Vehicle.id)
+            .where(
+                VehicleDriver.is_deleted.is_(False),
+                VehicleDriver.status == "active",
+                *active_vehicle_filter,
+            )
+        ).all()
+    }
+    driver_license_expiring_30 = 0
+    if active_driver_person_ids:
+        driver_license_expiring_30 = db.scalar(
+            select(func.count(PersonLicense.person_id)).where(
+                PersonLicense.is_deleted.is_(False),
+                PersonLicense.person_id.in_(active_driver_person_ids),
+                PersonLicense.expire_date.is_not(None),
+                PersonLicense.expire_date <= lease_30_deadline,
+            )
+        ) or 0
+    vehicles_without_drivers = db.scalar(
+        select(func.count(Vehicle.id)).where(
+            *active_vehicle_filter,
+            ~Vehicle.id.in_(
+                select(VehicleDriver.vehicle_id).where(
+                    VehicleDriver.is_deleted.is_(False), VehicleDriver.status == "active"
+                )
+            ),
+        )
+    ) or 0
+    open_claims = db.scalar(
+        select(func.count(VehicleAccident.id)).where(
+            VehicleAccident.is_deleted.is_(False),
+            VehicleAccident.claim_status.in_(CLAIM_OPEN_STATUSES),
         )
     ) or 0
 
@@ -1638,11 +3037,18 @@ def dashboard(db: Session):
         "leaseExpiring90": len(renewal_needed_dorms),
         "renewalNeededDorms": renewal_needed_dorms,
         "availableVehicles": available_vehicles,
-        "maintenanceVehicles": maintenance_vehicles,
+        "maintenanceVehicles": in_repair_vehicles,
+        "vehiclesInRepair": in_repair_vehicles,
         "disabledVehicles": disabled_vehicles,
         "vehicleInsuranceExpiring30": vehicle_insurance_expiring_30,
         "vehicleInspectionExpiring30": vehicle_inspection_expiring_30,
+        "vehicleRegistrationExpiring30": vehicle_registration_expiring_30,
         "vehicleMaintenanceDue30": vehicle_maintenance_due_30,
+        "vehicleLeaseExpiring60": vehicle_lease_expiring_60,
+        "uninsuredVehicles": uninsured_vehicles,
+        "vehiclesWithoutDrivers": vehicles_without_drivers,
+        "driverLicenseExpiring30": driver_license_expiring_30,
+        "openClaims": open_claims,
         "stayRiskSummary": stay_risks["riskSummary"],
         "stayExpiring30": stay_risks["expiring30"],
         "stayExpiring60": stay_risks["expiring60"],
