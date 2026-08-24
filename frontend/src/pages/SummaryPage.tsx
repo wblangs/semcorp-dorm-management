@@ -294,6 +294,94 @@ export function SummaryPage() {
         });
       });
 
+      // CHANGE: 底部各项数据汇总——按宿舍一行（在住/空铺/床位/入住率），最后合计行。
+      // 统计口径 = 实际导出的行（跟随当前搜索过滤结果）。
+      type DormStat = { dormId: number; dormName: string; occupied: number; empty: number; tempLeave: number };
+      const dormStats: DormStat[] = [];
+      const statByDorm = new Map<number, DormStat>();
+      filteredRows.forEach((row) => {
+        let stat = statByDorm.get(row.dormId);
+        if (!stat) {
+          stat = { dormId: row.dormId, dormName: row.dormName, occupied: 0, empty: 0, tempLeave: 0 };
+          statByDorm.set(row.dormId, stat);
+          dormStats.push(stat);
+        }
+        if (row.isEmpty) {
+          stat.empty += 1;
+        } else {
+          stat.occupied += 1;
+          if (row.note.includes("临时空出")) stat.tempLeave += 1;
+        }
+      });
+      const totalOccupied = dormStats.reduce((sum, stat) => sum + stat.occupied, 0);
+      const totalEmpty = dormStats.reduce((sum, stat) => sum + stat.empty, 0);
+      const totalTempLeave = dormStats.reduce((sum, stat) => sum + stat.tempLeave, 0);
+      const rate = (occupied: number, beds: number) => (beds > 0 ? `${Math.round((occupied / beds) * 1000) / 10}%` : "-");
+
+      sheet.addRow([]);
+
+      const summaryTitleRow = sheet.addRow(["数据汇总"]);
+      sheet.mergeCells(summaryTitleRow.number, 1, summaryTitleRow.number, COLUMNS.length);
+      const titleCell = summaryTitleRow.getCell(1);
+      titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${REPORT_HEADER_FILL}` } };
+      titleCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+      titleCell.alignment = { horizontal: "center", vertical: "middle" };
+      titleCell.border = border;
+      summaryTitleRow.height = 20;
+
+      const summaryHeaders = ["住址", "在住人数", "空铺数", "床位合计", "入住率", "临时空出", "", ""];
+      const summaryHeaderRow = sheet.addRow(summaryHeaders);
+      summaryHeaderRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        if (colNumber > COLUMNS.length) return;
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+        cell.font = { bold: true, size: 11 };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = border;
+      });
+
+      const writeSummaryRow = (values: (string | number)[], options: { bold?: boolean; fillArgb?: string }) => {
+        const excelRow = sheet.addRow(values);
+        for (let colNumber = 1; colNumber <= COLUMNS.length; colNumber += 1) {
+          const cell = excelRow.getCell(colNumber);
+          if (options.fillArgb) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: options.fillArgb } };
+          }
+          if (options.bold) cell.font = { bold: true };
+          cell.alignment = { horizontal: colNumber === 1 ? "left" : "center", vertical: "middle" };
+          cell.border = border;
+        }
+        return excelRow;
+      };
+
+      dormStats.forEach((stat) => {
+        writeSummaryRow(
+          [
+            stat.dormName,
+            stat.occupied,
+            stat.empty,
+            stat.occupied + stat.empty,
+            rate(stat.occupied, stat.occupied + stat.empty),
+            stat.tempLeave || "",
+            "",
+            "",
+          ],
+          { fillArgb: `FF${dormColor.get(stat.dormId)?.excel ?? "FFFFFF"}` },
+        );
+      });
+      writeSummaryRow(
+        [
+          "合计",
+          totalOccupied,
+          totalEmpty,
+          totalOccupied + totalEmpty,
+          rate(totalOccupied, totalOccupied + totalEmpty),
+          totalTempLeave || "",
+          "",
+          "",
+        ],
+        { bold: true, fillArgb: "FFFDE68A" },
+      );
+
       sheet.views = [{ state: "frozen", ySplit: 1 }];
 
       const buffer = await workbook.xlsx.writeBuffer();
