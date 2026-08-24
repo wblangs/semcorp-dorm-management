@@ -28,6 +28,7 @@ import {
 import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
 
+// 分页支持 hash 深链：/ui/vehicles/1#policies 直达保险分页，便于手册引用与分享。
 const TABS = [
   { key: "drivers", label: "挂靠人" },
   { key: "policies", label: "保险" },
@@ -38,6 +39,11 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+const tabFromHash = (): TabKey => {
+  const hash = window.location.hash.replace("#", "");
+  return (TABS.some((item) => item.key === hash) ? hash : "drivers") as TabKey;
+};
 
 const numOrNull = (value: string) => (value.trim() === "" ? null : Number(value));
 const money = (value: number | null | undefined) => (value != null ? `$${value.toLocaleString()}` : "-");
@@ -50,7 +56,7 @@ export function VehicleDetailPage() {
   const [detail, setDetail] = useState<VehicleDetail | null>(null);
   const [dorms, setDorms] = useState<Dorm[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
-  const [tab, setTab] = useState<TabKey>("drivers");
+  const [tab, setTab] = useState<TabKey>(tabFromHash);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
@@ -220,7 +226,10 @@ export function VehicleDetailPage() {
             <button
               key={item.key}
               type="button"
-              onClick={() => setTab(item.key)}
+              onClick={() => {
+                setTab(item.key);
+                window.history.replaceState(null, "", `#${item.key}`);
+              }}
               className={`whitespace-nowrap rounded-t-lg px-3.5 py-2 text-sm font-medium transition ${
                 tab === item.key ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500 hover:text-slate-800"
               }`}
