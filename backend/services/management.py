@@ -605,6 +605,15 @@ def update_room(room_id: int, payload: RoomUpdate, db: Session, operator: str = 
     values = payload.model_dump(exclude_unset=True)
     if "dorm_id" in values and not _get_active(db, Dorm, values["dorm_id"]):
         raise HTTPException(status_code=400, detail="Dorm does not exist")
+    # 床位数不能低于当前在住人数，否则会造成"超员"脏数据：
+    # 报表会在同宿舍其他房间多出空铺行，且入住校验全部失真。
+    if "bed_count" in values and values["bed_count"] is not None:
+        occupied = _active_room_count(room.id, db)
+        if values["bed_count"] < occupied:
+            raise HTTPException(
+                status_code=400,
+                detail=f"该房间当前有 {occupied} 人在住，床位数不能小于 {occupied}；请先在入住分配中调整人员再修改床位",
+            )
     before = _model_data(room)
     for key, value in values.items():
         setattr(room, key, value)

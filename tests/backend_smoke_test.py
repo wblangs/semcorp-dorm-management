@@ -102,6 +102,29 @@ class BackendSmokeTest(unittest.TestCase):
         )
         self.assertEqual(next_allocation.status, "active")
 
+    def test_room_bed_count_cannot_drop_below_active_occupancy(self):
+        dorm = management.create_dorm(DormCreate(name="BedGuard", type="House", address="1 Guard St"), self.db)
+        room = management.create_room(
+            RoomCreate(dorm_id=dorm.id, room_name="次卧", room_type="Single", bed_count=2),
+            self.db,
+        )
+        for name in ("甲", "乙"):
+            person = management.create_person(
+                PersonCreate(chinese_name=name, department="IT", person_type="Employee", gender="Male"),
+                self.db,
+            )
+            management.create_allocation(
+                AllocationCreate(person_id=person.id, dorm_id=dorm.id, room_id=room.id, check_in_date=date.today()),
+                self.db,
+            )
+        # 住着 2 人时床位数不能改成 1（超员脏数据的根因，见 2360-212 事件）。
+        with self.assertRaises(HTTPException) as ctx:
+            management.update_room(room.id, RoomUpdate(bed_count=1), self.db)
+        self.assertIn("床位数不能小于", ctx.exception.detail)
+        # 改大或保持不变仍然允许。
+        updated = management.update_room(room.id, RoomUpdate(bed_count=3), self.db)
+        self.assertEqual(updated.bed_count, 3)
+
     def test_inactive_dorm_or_room_cannot_be_allocated(self):
         person = management.create_person(
             PersonCreate(

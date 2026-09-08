@@ -67,6 +67,11 @@ export function AllocationPage() {
   // 临时空出 dialog state
   const [tempLeaveFor, setTempLeaveFor] = useState<Allocation | null>(null);
   const [tempLeaveDraft, setTempLeaveDraft] = useState({ start: "", end: "" });
+  // CHANGE: 退房改为应用内确认弹窗——原生 window.confirm 在部分公司安全浏览器里
+  // 会被拦截（弹窗不出现、静默返回取消），表现为按钮"点了没反应"。
+  const [checkoutFor, setCheckoutFor] = useState<Allocation | null>(null);
+  const [checkoutDate, setCheckoutDate] = useState("");
+  const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     person_id: "",
@@ -463,14 +468,23 @@ export function AllocationPage() {
     }
   };
 
-  const onCheckout = async (row: Allocation) => {
-    if (!confirm("确认为该人员办理退房？")) return;
+  const onCheckout = (row: Allocation) => {
+    setCheckoutFor(row);
+    setCheckoutDate(todayISO());
+  };
+
+  const confirmCheckout = async () => {
+    if (!checkoutFor) return;
     setError("");
+    setCheckoutSubmitting(true);
     try {
-      await api.checkoutAllocation(row.id, todayISO());
+      await api.checkoutAllocation(checkoutFor.id, checkoutDate || todayISO());
+      setCheckoutFor(null);
       await load();
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setCheckoutSubmitting(false);
     }
   };
 
@@ -829,7 +843,7 @@ export function AllocationPage() {
                             <button className={editButtonClass} type="button" onClick={() => openTempLeave(row)}>
                               临时空出
                             </button>
-                            <button className={editButtonClass} type="button" onClick={() => void onCheckout(row)}>
+                            <button className={editButtonClass} type="button" onClick={() => onCheckout(row)}>
                               退房
                             </button>
                           </div>
@@ -924,6 +938,9 @@ export function AllocationPage() {
                 />
               </FormField>
             </div>
+            {!tempLeaveDraft.start || !tempLeaveDraft.end ? (
+              <p className="mt-3 text-xs text-amber-600">请填写开始和结束日期后才能保存</p>
+            ) : null}
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               {tempLeaveFor.temp_leave_start ? (
                 <button className={`${deleteButtonClass} px-4 py-2 text-sm`} type="button" onClick={() => void saveTempLeave(true)}>
@@ -940,6 +957,42 @@ export function AllocationPage() {
                 onClick={() => void saveTempLeave(false)}
               >
                 保存
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {checkoutFor ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={() => setCheckoutFor(null)}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-1 text-sm font-semibold text-slate-900">确认退房</h3>
+            <p className="mb-4 text-sm text-slate-500">
+              {personMap.get(checkoutFor.person_id) ?? ""} · {dormMap.get(checkoutFor.dorm_id) ?? ""} /{" "}
+              {roomMap.get(checkoutFor.room_id) ?? ""} · 入住 {checkoutFor.check_in_date}
+            </p>
+            <FormField label="退房日期" required>
+              <input
+                className={fieldControlClass}
+                type="date"
+                value={checkoutDate}
+                onChange={(e) => setCheckoutDate(e.target.value)}
+              />
+            </FormField>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className={secondaryButtonClass} type="button" onClick={() => setCheckoutFor(null)}>
+                取消
+              </button>
+              <button
+                className={primaryButtonClass}
+                type="button"
+                disabled={!checkoutDate || checkoutSubmitting}
+                onClick={() => void confirmCheckout()}
+              >
+                {checkoutSubmitting ? "提交中..." : "确认退房"}
               </button>
             </div>
           </div>
