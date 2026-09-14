@@ -68,6 +68,7 @@ class PersonCreate(BaseModel):
     english_name: Optional[str] = None
     department: str
     person_type: str
+    title: Optional[str] = None
     gender: Literal["Male", "Female"]
 
 
@@ -76,6 +77,7 @@ class PersonUpdate(BaseModel):
     english_name: Optional[str] = None
     department: Optional[str] = None
     person_type: Optional[str] = None
+    title: Optional[str] = None
     gender: Optional[Literal["Male", "Female"]] = None
 
 

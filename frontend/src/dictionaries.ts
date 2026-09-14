@@ -3,6 +3,7 @@ export type DictionaryKey =
   | "roomTypes"
   | "assetItems"
   | "personTypes"
+  | "personTitles"
   | "departments"
   | "visaTypes"
   | "vehicleTypes"
@@ -28,6 +29,7 @@ export const dictionaryLabels: Record<DictionaryKey, string> = {
   roomTypes: "房间类型",
   assetItems: "资产物品",
   personTypes: "人员类型",
+  personTitles: "职称",
   departments: "部门",
   visaTypes: "签证类型",
   vehicleTypes: "车辆类型",
@@ -62,6 +64,16 @@ export const defaultDictionaries: DictionaryState = {
     { label: "Employee", value: "Employee" },
     { label: "Contractor", value: "Contractor" },
     { label: "Visitor", value: "Visitor" },
+  ],
+  personTitles: [
+    { label: "总经理", value: "总经理" },
+    { label: "副总", value: "副总" },
+    { label: "部长", value: "部长" },
+    { label: "主管", value: "主管" },
+    { label: "工程师", value: "工程师" },
+    { label: "班长", value: "班长" },
+    { label: "检验员", value: "检验员" },
+    { label: "操作工", value: "操作工" },
   ],
   departments: [
     { label: "IT", value: "IT" },

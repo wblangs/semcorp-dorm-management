@@ -182,6 +182,8 @@ def run_lightweight_migrations() -> None:
                 row[1]
                 for row in conn.execute(text("PRAGMA table_info(people)")).fetchall()
             }
+            if "title" not in people_columns:
+                safe_add_column(conn, "ALTER TABLE people ADD COLUMN title VARCHAR(50)")
             if "english_name" in people_columns:
                 english_not_null = next(
                     row[3]

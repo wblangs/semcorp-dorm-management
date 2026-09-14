@@ -110,6 +110,19 @@ DEFAULT_DICTIONARIES = {
             ("物流", "物流"),
         ],
     },
+    "personTitles": {
+        "label": "职称",
+        "items": [
+            ("总经理", "总经理"),
+            ("副总", "副总"),
+            ("部长", "部长"),
+            ("主管", "主管"),
+            ("工程师", "工程师"),
+            ("班长", "班长"),
+            ("检验员", "检验员"),
+            ("操作工", "操作工"),
+        ],
+    },
     "visaTypes": {
         "label": "签证类型",
         "items": [("B1/B2", "B1/B2"), ("L1", "L1"), ("H1B", "H1B"), ("ESTA", "ESTA")],
@@ -458,6 +471,7 @@ def _serialize_stay(stay: Optional[Stay], person: Person, today: date):
             "english_name": person.english_name or "",
             "department": person.department,
             "person_type": person.person_type,
+            "title": person.title,
             "gender": person.gender,
         },
         "visa_type": stay.visa_type if stay else None,

@@ -143,7 +143,7 @@ export function SummaryPage() {
               ? `${person.chinese_name}${person.english_name ? ` / ${person.english_name}` : ""}`
               : "",
             department: person?.department ?? "",
-            title: "",
+            title: person?.title ?? "",
             room: room.room_name,
             moveInDate: allocation.check_in_date ?? "",
             note: [allocation.note, tempLeave].filter(Boolean).join("；"),

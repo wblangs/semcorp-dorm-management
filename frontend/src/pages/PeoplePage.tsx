@@ -16,6 +16,7 @@ type PersonFormState = {
   english_name: string;
   department: string;
   person_type: string;
+  title: string;
   gender: "Male" | "Female";
 };
 
@@ -42,6 +43,7 @@ const emptyForm: PersonFormState = {
   english_name: "",
   department: "IT",
   person_type: "Employee",
+  title: "",
   gender: "Male",
 };
 
@@ -116,11 +118,12 @@ export function PeoplePage() {
     setError("");
     try {
       let personId = editingId;
+      const personPayload = { ...form, title: form.title || null };
       if (editingId) {
-        const updated = await api.updatePerson(editingId, form);
+        const updated = await api.updatePerson(editingId, personPayload);
         personId = updated.id;
       } else {
-        const created = await api.createPerson(form);
+        const created = await api.createPerson(personPayload);
         personId = created.id;
       }
       const hasStayInput = Object.values(stayForm).some((value) => value.trim());
@@ -178,6 +181,7 @@ export function PeoplePage() {
       english_name: row.english_name ?? "",
       department: row.department,
       person_type: row.person_type,
+      title: row.title ?? "",
       gender: row.gender,
     });
     setStayForm({
@@ -305,6 +309,7 @@ export function PeoplePage() {
         row.english_name,
         row.department,
         row.person_type,
+        row.title,
         row.gender,
         risk,
         allocationStatus,
@@ -349,6 +354,19 @@ export function PeoplePage() {
               {option.label}
             </option>
           ))}
+        </select>
+        </FormField>
+        <FormField label="职称">
+        <select className={fieldControlClass} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}>
+          <option value="">未设置</option>
+          {(dictionaries.personTitles ?? []).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+          {form.title && !(dictionaries.personTitles ?? []).some((option) => option.value === form.title) ? (
+            <option value={form.title}>{form.title}（当前值未在字典中）</option>
+          ) : null}
         </select>
         </FormField>
         <FormField label="性别" required>
@@ -453,6 +471,7 @@ export function PeoplePage() {
             { header: "英文名", cell: (row) => row.english_name || "-" },
             { header: "部门", cell: (row) => row.department },
             { header: "类型", cell: (row) => row.person_type },
+            { header: "职称", cell: (row) => row.title ?? "-" },
             { header: "性别", cell: (row) => row.gender },
             {
               header: "停留风险",

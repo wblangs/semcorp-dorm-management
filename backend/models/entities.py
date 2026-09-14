@@ -84,6 +84,8 @@ class Person(TimestampSoftDeleteMixin, Base):
     english_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     department: Mapped[str] = mapped_column(String(100), nullable=False)
     person_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    # 职称（字典 personTitles），用于汇总报表"职称"列。
+    title: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     gender: Mapped[Literal["Male", "Female"]] = mapped_column(String(10), nullable=False)
     stay: Mapped[Optional["Stay"]] = relationship(
         back_populates="person", uselist=False, cascade="all, delete-orphan"

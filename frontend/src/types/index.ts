@@ -48,6 +48,7 @@ export type Person = {
   english_name: string | null;
   department: string;
   person_type: string;
+  title: string | null;
   gender: "Male" | "Female";
 };
 
@@ -339,6 +340,7 @@ export type StayPerson = {
   english_name: string | null;
   department: string;
   person_type: string;
+  title: string | null;
   gender: "Male" | "Female";
 };
 
