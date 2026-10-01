@@ -17,6 +17,7 @@ import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Vehicle } from "../types";
 import { dueDateClass, labelOf, ownershipOptions, vehicleStatusOptions } from "../vehicleConstants";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 type VehicleFormState = {
   plate_number: string;
@@ -73,6 +74,7 @@ const emptyForm: VehicleFormState = {
 const numOrNull = (value: string) => (value.trim() === "" ? null : Number(value));
 
 export function VehiclesPage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit, isAdmin } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Vehicle[]>([]);
@@ -130,7 +132,7 @@ export function VehiclesPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (editingId && !confirm("确认保存修改？")) return;
+    if (editingId && !(await confirmDialog("确认保存修改？"))) return;
     setError("");
     try {
       if (editingId) {
@@ -183,7 +185,7 @@ export function VehiclesPage() {
   };
 
   const onDelete = async (row: Vehicle) => {
-    if (!confirm(`确认删除车辆 ${row.plate_number}？相关保单、保养、修理、事故记录将一并隐藏`)) return;
+    if (!(await confirmDialog(`确认删除车辆 ${row.plate_number}？相关保单、保养、修理、事故记录将一并隐藏`, { danger: true }))) return;
     setError("");
     try {
       await api.deleteVehicle(row.id);

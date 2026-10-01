@@ -7,6 +7,7 @@ import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, prima
 import type { Allocation, AvailableRoom, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 type Occupant = {
   id: number;
@@ -43,6 +44,7 @@ type DormAvailabilityGroup = DormGenderRow & {
 const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
 export function AllocationPage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit } = useAuth();
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -384,7 +386,7 @@ export function AllocationPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (editingId && !confirm("确认保存修改？")) return;
+    if (editingId && !(await confirmDialog("确认保存修改？"))) return;
     setError("");
     setSubmitting(true);
 
@@ -422,7 +424,7 @@ export function AllocationPage() {
   };
 
   const onDeletePrevious = async (row: Allocation) => {
-    if (!confirm("确认从分配页面删除该历史记录？管理员备份记录仍会保留。")) return;
+    if (!(await confirmDialog("确认从分配页面删除该历史记录？管理员备份记录仍会保留。", { danger: true }))) return;
     setError("");
     try {
       await api.deleteAllocation(row.id);

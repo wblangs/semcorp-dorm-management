@@ -12,6 +12,7 @@ import {
   secondaryButtonClass,
 } from "../components/FormField";
 import type { User } from "../types";
+import { useConfirm } from "../components/ConfirmProvider";
 
 type UserFormState = {
   username: string;
@@ -36,6 +37,7 @@ const emptyForm: UserFormState = {
 };
 
 export function UsersPage() {
+  const { confirmDialog } = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [form, setForm] = useState<UserFormState>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -70,7 +72,7 @@ export function UsersPage() {
   }
 
   async function handleDelete(user: User) {
-    if (!confirm(`确认删除用户 ${user.display_name || user.username}？`)) return;
+    if (!(await confirmDialog(`确认删除用户 ${user.display_name || user.username}？`, { danger: true }))) return;
     setError("");
     setMessage("");
     try {
@@ -94,7 +96,7 @@ export function UsersPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (editingId && !confirm("确认保存修改？")) return;
+    if (editingId && !(await confirmDialog("确认保存修改？"))) return;
     setError("");
     setMessage("");
     try {

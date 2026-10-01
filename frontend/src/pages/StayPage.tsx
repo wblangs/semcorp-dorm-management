@@ -7,8 +7,10 @@ import { deleteButtonClass, editButtonClass, fieldControlClass, FormField, prima
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { StayRecord } from "../types";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 export function StayPage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<StayRecord[]>([]);
@@ -63,7 +65,7 @@ export function StayPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!confirm("确认保存修改？")) return;
+    if (!(await confirmDialog("确认保存修改？"))) return;
     setError("");
     try {
       await api.upsertStay({
@@ -162,7 +164,7 @@ export function StayPage() {
               disabled={!row.id}
               onClick={async () => {
                 if (!row.id) return;
-                if (!confirm("确认删除该停留记录？")) return;
+                if (!(await confirmDialog("确认删除该停留记录？", { danger: true }))) return;
                 try {
                   await api.deleteStay(row.id);
                   await load();

@@ -9,12 +9,14 @@ import { api } from "../api";
 import { deleteButtonClass, fieldControlClass, FormField, primaryButtonClass } from "../components/FormField";
 import { useDictionaries } from "../hooks/useDictionaries";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 const dictionaryKeys = Object.keys(dictionaryLabels) as DictionaryKey[];
 
 const emptyOption = { label: "", value: "" };
 
 export function DictionariesPage() {
+  const { confirmDialog } = useConfirm();
   const dictionaries = useDictionaries();
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<Record<DictionaryKey, DictionaryOption>>(
@@ -49,7 +51,7 @@ export function DictionariesPage() {
   };
 
   const restoreDefaults = async () => {
-    if (!confirm("确认恢复全部默认字典？")) return;
+    if (!(await confirmDialog("确认恢复全部默认字典？"))) return;
     setError("");
     try {
       await Promise.all(
@@ -116,8 +118,8 @@ export function DictionariesPage() {
                   <button
                     className={`${deleteButtonClass} self-end rounded-lg px-3 py-2 text-sm`}
                     type="button"
-                    onClick={() => {
-                      if (!confirm("确认删除该字典项？")) return;
+                    onClick={async () => {
+                      if (!(await confirmDialog("确认删除该字典项？", { danger: true }))) return;
                       void updateDictionary(key, dictionaries[key].filter((_, itemIndex) => itemIndex !== index));
                     }}
                   >

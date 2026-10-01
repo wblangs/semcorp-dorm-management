@@ -14,8 +14,10 @@ import {
 import type { Allocation, Dorm, Person, Room } from "../types";
 import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 export function CheckInRecordsPage() {
+  const { confirmDialog } = useConfirm();
   const { isAdmin } = useAuth();
 
   const [allocations, setAllocations] = useState<Allocation[]>([]);
@@ -123,7 +125,7 @@ export function CheckInRecordsPage() {
     event.preventDefault();
 
     if (!editingId) return;
-    if (!confirm("确认保存修改？")) return;
+    if (!(await confirmDialog("确认保存修改？"))) return;
 
     setError("");
     setSubmitting(true);
@@ -156,7 +158,7 @@ export function CheckInRecordsPage() {
   };
 
   const onCheckout = async (row: Allocation) => {
-    if (!confirm("确认为该人员办理退房？")) return;
+    if (!(await confirmDialog("确认为该人员办理退房？"))) return;
     setError("");
 
     try {
@@ -168,7 +170,7 @@ export function CheckInRecordsPage() {
   };
 
   const onDelete = async (row: Allocation) => {
-    if (!confirm("确认删除该入住记录？")) return;
+    if (!(await confirmDialog("确认删除该入住记录？", { danger: true }))) return;
 
     setError("");
 
@@ -186,7 +188,7 @@ export function CheckInRecordsPage() {
   };
 
   const onRecover = async (row: Allocation) => {
-    if (!confirm("确认恢复该记录？")) return;
+    if (!(await confirmDialog("确认恢复该记录？"))) return;
     setError("");
     try {
       await api.recoverAllocationUserHistory(row.id);

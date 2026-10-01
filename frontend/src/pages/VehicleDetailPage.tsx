@@ -27,6 +27,7 @@ import {
 } from "../vehicleConstants";
 import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 // 分页支持 hash 深链：/ui/vehicles/1#policies 直达保险分页，便于手册引用与分享。
 const TABS = [
@@ -49,6 +50,7 @@ const numOrNull = (value: string) => (value.trim() === "" ? null : Number(value)
 const money = (value: number | null | undefined) => (value != null ? `$${value.toLocaleString()}` : "-");
 
 export function VehicleDetailPage() {
+  const { confirmDialog, promptDialog } = useConfirm();
   const { vehicleId } = useParams();
   const id = Number(vehicleId);
   const { canEdit, isAdmin } = useAuth();
@@ -92,7 +94,10 @@ export function VehicleDetailPage() {
 
   const onUpdateOdometer = async () => {
     if (!detail) return;
-    const input = prompt("输入当前里程 (miles)", detail.vehicle.odometer != null ? String(detail.vehicle.odometer) : "");
+    const input = await promptDialog("输入当前里程 (miles)", {
+      inputType: "number",
+      defaultValue: detail.vehicle.odometer != null ? String(detail.vehicle.odometer) : "",
+    });
     if (input === null) return;
     const value = Number(input);
     if (!Number.isFinite(value) || value < 0) {
@@ -105,7 +110,7 @@ export function VehicleDetailPage() {
     } catch (err) {
       const message = (err as Error).message;
       // 409: 新里程小于当前里程，需要二次确认（换表/录错场景）。
-      if (message.includes("小于当前里程") && confirm(`${message}\n\n仍要保存吗？`)) {
+      if (message.includes("小于当前里程") && (await confirmDialog(`${message}\n\n仍要保存吗？`))) {
         await api.updateVehicleOdometer(id, value, true);
         await load();
       } else {
@@ -283,6 +288,7 @@ function DriversTab({
   onError: (message: string) => void;
   onWarnings: (warnings: string[]) => void;
 }) {
+  const { confirmDialog } = useConfirm();
   const [personId, setPersonId] = useState("");
   const [role, setRole] = useState<"primary" | "secondary">("secondary");
 
@@ -304,7 +310,7 @@ function DriversTab({
   };
 
   const onRemove = async (driverId: number, name: string) => {
-    if (!confirm(`确认解除 ${name} 的挂靠？记录将保留在历史中`)) return;
+    if (!(await confirmDialog(`确认解除 ${name} 的挂靠？记录将保留在历史中`, { danger: true }))) return;
     try {
       await api.removeVehicleDriver(driverId);
       await reload();
@@ -446,6 +452,7 @@ function PoliciesTab({
   onWarnings: (warnings: string[]) => void;
   dictionaries: ReturnType<typeof useDictionaries>;
 }) {
+  const { confirmDialog } = useConfirm();
   const [form, setForm] = useState<PolicyFormState>(emptyPolicyForm);
   const [showForm, setShowForm] = useState(false);
 
@@ -477,7 +484,7 @@ function PoliciesTab({
   };
 
   const onDelete = async (policy: InsurancePolicy) => {
-    if (!confirm(`确认删除保单 ${policy.policy_number ?? policy.insurer}？`)) return;
+    if (!(await confirmDialog(`确认删除保单 ${policy.policy_number ?? policy.insurer}？`, { danger: true }))) return;
     try {
       await api.deleteVehiclePolicy(policy.id);
       await reload();
@@ -632,6 +639,7 @@ function MaintenancesTab({
   onError: (message: string) => void;
   dictionaries: ReturnType<typeof useDictionaries>;
 }) {
+  const { confirmDialog } = useConfirm();
   const emptyMaintenanceForm: MaintenanceFormState = {
     maintenance_date: todayISO(),
     odometer: "",
@@ -674,7 +682,7 @@ function MaintenancesTab({
   };
 
   const onDelete = async (row: VehicleMaintenance) => {
-    if (!confirm(`确认删除 ${row.maintenance_date} 的保养记录？下次保养到期会重新按剩余记录推算`)) return;
+    if (!(await confirmDialog(`确认删除 ${row.maintenance_date} 的保养记录？下次保养到期会重新按剩余记录推算`, { danger: true }))) return;
     try {
       await api.deleteVehicleMaintenance(row.id);
       await reload();
@@ -801,6 +809,7 @@ function RepairsTab({
   reload: () => Promise<void>;
   onError: (message: string) => void;
 }) {
+  const { confirmDialog } = useConfirm();
   const emptyRepairForm: RepairFormState = {
     reported_date: todayISO(),
     repair_start_date: "",
@@ -869,7 +878,7 @@ function RepairsTab({
   };
 
   const onDelete = async (row: VehicleRepair) => {
-    if (!confirm(`确认删除 ${row.reported_date} 的修理记录？`)) return;
+    if (!(await confirmDialog(`确认删除 ${row.reported_date} 的修理记录？`, { danger: true }))) return;
     try {
       await api.deleteVehicleRepair(row.id);
       await reload();
@@ -1063,6 +1072,7 @@ function AccidentsTab({
   people: Person[];
   dictionaries: ReturnType<typeof useDictionaries>;
 }) {
+  const { confirmDialog } = useConfirm();
   const emptyAccidentForm: AccidentFormState = {
     accident_date: todayISO(),
     accident_time: "12:00",
@@ -1160,7 +1170,7 @@ function AccidentsTab({
   };
 
   const onDelete = async (row: VehicleAccident) => {
-    if (!confirm(`确认删除 ${row.accident_datetime.slice(0, 10)} 的事故记录？关联修理单会解除关联`)) return;
+    if (!(await confirmDialog(`确认删除 ${row.accident_datetime.slice(0, 10)} 的事故记录？关联修理单会解除关联`, { danger: true }))) return;
     try {
       await api.deleteVehicleAccident(row.id);
       await reload();

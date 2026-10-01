@@ -8,6 +8,7 @@ import { useDictionaries } from "../hooks/useDictionaries";
 import type { Allocation, Dorm, Person, PersonLicense, Room, StayRecord } from "../types";
 import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 const isActiveStatus = (status?: string | null) => (status ?? "").trim().toLowerCase() === "active";
 
@@ -66,6 +67,7 @@ const emptyLicenseForm: LicenseFormState = {
 };
 
 export function PeoplePage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Person[]>([]);
@@ -114,7 +116,7 @@ export function PeoplePage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (editingId && !confirm("确认保存修改？")) return;
+    if (editingId && !(await confirmDialog("确认保存修改？"))) return;
     setError("");
     try {
       let personId = editingId;
@@ -195,7 +197,7 @@ export function PeoplePage() {
   };
 
   const onDelete = async (row: Person) => {
-    if (!confirm(`确认删除人员 ${row.chinese_name}/${row.english_name || "-"}？`)) return;
+    if (!(await confirmDialog(`确认删除人员 ${row.chinese_name}/${row.english_name || "-"}？`, { danger: true }))) return;
     setError("");
     try {
       await api.deletePerson(row.id);

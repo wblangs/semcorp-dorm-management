@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDictionaries } from "../hooks/useDictionaries";
 import type { Dorm, Vehicle } from "../types"; // CHANGED: 加入 Vehicle 类型
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 type DormFormState = {
   name: string;
@@ -30,6 +31,7 @@ const emptyForm: DormFormState = {
 const SHOW_DORM_VEHICLES = false;
 
 export function DormsPage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Dorm[]>([]);
@@ -68,7 +70,7 @@ export function DormsPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (editingId && !confirm("确认保存修改？")) return;
+    if (editingId && !(await confirmDialog("确认保存修改？"))) return;
     setError("");
     try {
       const payload = {
@@ -102,7 +104,7 @@ export function DormsPage() {
   };
 
   const onDelete = async (row: Dorm) => {
-    if (!confirm(`确认删除宿舍 ${row.name}？`)) return;
+    if (!(await confirmDialog(`确认删除宿舍 ${row.name}？`, { danger: true }))) return;
     setError("");
     try {
       await api.deleteDorm(row.id);

@@ -8,12 +8,14 @@ import { DORM_PALETTE, REPORT_HEADER_FILL } from "../dormPalette";
 import type { Dorm, Room, RoomItem } from "../types";
 import { todayISO } from "../utils/date";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 const COLUMNS = ["宿舍", "房间", "物品", "型号", "数量"];
 
 type Draft = { name: string; item_type: string; count: number };
 
 export function RoomAssetsPage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -108,7 +110,7 @@ export function RoomAssetsPage() {
   const cancelEdit = () => setEditingItemId(null);
 
   const saveEdit = async (item: RoomItem) => {
-    if (!confirm("确认保存修改？")) return;
+    if (!(await confirmDialog("确认保存修改？"))) return;
     setError("");
     setBusy(true);
     try {
@@ -151,7 +153,7 @@ export function RoomAssetsPage() {
   };
 
   const removeItem = async (item: RoomItem) => {
-    if (!confirm(`确认删除资产「${item.name}」？`)) return;
+    if (!(await confirmDialog(`确认删除资产「${item.name}」？`, { danger: true }))) return;
     setError("");
     setBusy(true);
     try {

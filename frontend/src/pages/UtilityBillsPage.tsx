@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { DataTable } from "../components/DataTable";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 import {
   deleteButtonClass,
   editButtonClass,
@@ -38,6 +39,7 @@ const emptyForm: BillFormState = {
 
 
 export function UtilityBillsPage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<UtilityBill[]>([]);
@@ -85,7 +87,7 @@ export function UtilityBillsPage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (editingId && !confirm("确认保存修改？")) return;
+    if (editingId && !(await confirmDialog("确认保存修改？"))) return;
     setError("");
     try {
       if (editingId) {
@@ -115,7 +117,7 @@ export function UtilityBillsPage() {
   };
 
   const onDelete = async (row: UtilityBill) => {
-    if (!confirm(`确认删除 ${dormMap.get(row.dorm_id) ?? ""} ${row.fee_type}（${row.due_date}）？`)) return;
+    if (!(await confirmDialog(`确认删除 ${dormMap.get(row.dorm_id) ?? ""} ${row.fee_type}（${row.due_date}）？`, { danger: true }))) return;
     setError("");
     try {
       await api.deleteUtilityBill(row.id);

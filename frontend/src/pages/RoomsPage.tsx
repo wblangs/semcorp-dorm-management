@@ -8,6 +8,7 @@ import { useDictionaries } from "../hooks/useDictionaries";
 import { buildRoomAlt, dormColorMap } from "../dormPalette";
 import type { Dorm, Room } from "../types";
 import { ErrorDialog } from "../components/ErrorDialog";
+import { useConfirm } from "../components/ConfirmProvider";
 
 type RoomFormState = {
   dorm_id: string;
@@ -28,6 +29,7 @@ const emptyForm: RoomFormState = {
 };
 
 export function RoomsPage() {
+  const { confirmDialog } = useConfirm();
   const { canEdit } = useAuth();
   const dictionaries = useDictionaries();
   const [rows, setRows] = useState<Room[]>([]);
@@ -61,7 +63,7 @@ export function RoomsPage() {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.dorm_id) return;
-    if (editingId && !confirm("确认保存修改？")) return;
+    if (editingId && !(await confirmDialog("确认保存修改？"))) return;
     setError("");
     try {
       const payload = {
@@ -94,7 +96,7 @@ export function RoomsPage() {
   };
 
   const onDelete = async (row: Room) => {
-    if (!confirm(`确认删除房间 ${row.room_name}？`)) return;
+    if (!(await confirmDialog(`确认删除房间 ${row.room_name}？`, { danger: true }))) return;
     setError("");
     try {
       await api.deleteRoom(row.id);

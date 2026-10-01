@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { ConfirmProvider } from "./components/ConfirmProvider";
 import { LanguageBoundary, LanguageProvider } from "./i18n";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { AllocationPage } from "./pages/AllocationPage";
@@ -102,7 +103,9 @@ export default function App() {
     <LanguageProvider>
       <AuthProvider>
         <LanguageBoundary>
-          <AppRoutes />
+          <ConfirmProvider>
+            <AppRoutes />
+          </ConfirmProvider>
         </LanguageBoundary>
       </AuthProvider>
     </LanguageProvider>
